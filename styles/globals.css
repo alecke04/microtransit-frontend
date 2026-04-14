@@ -216,6 +216,20 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
 }
 
+/* Pulsing animation for stationary markers */
+@keyframes pulse-marker {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.8));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(16, 185, 129, 1));
+  }
+}
+
+.maplibregl-canvas {
+  filter: var(--pulse, none);
+}
+
 @media (max-width: 900px) {
   .map-layout {
     grid-template-columns: 1fr;
@@ -232,15 +246,20 @@ h1, h2, h3, h4, h5, h6 {
   .map-and-schedule {
     flex-direction: column;
     height: auto;
+    overflow-y: auto;
   }
 
   .map-section {
-    min-height: 70vh;
-    max-height: 70vh;
+    flex: 0 0 100vh;
+    min-height: 100vh;
+    position: relative;
+    overflow: hidden;
   }
 
   .schedule-section {
-    min-height: 30vh;
-    max-height: 30vh;
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow-y: auto;
   }
 }
