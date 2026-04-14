@@ -94,8 +94,8 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   pointer-events: auto;
   overflow: hidden;
-  height: 55vh;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 55vh;
 }
 
 .schedule-section {
@@ -277,15 +277,13 @@ h1, h2, h3, h4, h5, h6 {
   .schedule-section {
     display: block;
     width: 100%;
-    min-height: 30vh;
+    min-height: auto;
     height: auto;
     overflow-y: auto;
     grid-column: 1;
     grid-row: 3;
-    padding: 1.5rem;
-    border-top: 1px solid #e0e0e0;
-  }
-    border-top: 1px solid #e0e0e0;
-    padding: 1.5rem;
+    padding: 0.5rem 1.5rem 1.5rem 1.5rem;
+    border-top: none;
+    background: transparent;
   }
 }

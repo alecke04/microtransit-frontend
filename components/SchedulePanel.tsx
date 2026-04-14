@@ -80,11 +80,11 @@ export default function SchedulePanel({ deviceId }: { deviceId: string }) {
   }, [deviceId]);
 
   if (error) {
-    return <div className="text-sm text-fpuMedium italic">{error}</div>;
+    return <div className="bg-fpuBg rounded-lg p-4 text-sm text-fpuMedium italic border border-fpuLight">{error}</div>;
   }
 
   if (!data) {
-    return <div className="text-sm text-fpuMedium">Loading schedule...</div>;
+    return <div className="bg-fpuBg rounded-lg p-4 text-sm text-fpuMedium border border-fpuLight">Loading schedule...</div>;
   }
 
   return (
