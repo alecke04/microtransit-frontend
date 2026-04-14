@@ -81,26 +81,31 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .map-and-schedule {
-  display: none;
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-height: 100vh;
+  overflow-y: auto;
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .map-section {
   position: relative;
   pointer-events: auto;
   overflow: hidden;
-  height: 100vh;
-  grid-column: 2;
-  grid-row: 1;
+  height: 55vh;
+  flex-shrink: 0;
 }
 
 .schedule-section {
-  display: none;
+  display: block;
   border-top: 1px solid #e0e0e0;
   background: #ffffff;
   overflow-y: auto;
   padding: 1.5rem;
-  grid-column: 1 / -1;
-  grid-row: 3;
+  min-height: 30vh;
+  flex-shrink: 0;
 }
 
 .map {
@@ -238,7 +243,7 @@ h1, h2, h3, h4, h5, h6 {
   .map-layout {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: auto 100vh auto;
+    grid-template-rows: auto auto auto;
     min-height: auto;
     height: auto;
   }
@@ -255,9 +260,13 @@ h1, h2, h3, h4, h5, h6 {
     grid-row: 1;
   }
 
+  .map-and-schedule {
+    display: contents;
+  }
+
   .map-section {
-    min-height: 100vh;
-    height: 100vh;
+    min-height: 60vh;
+    height: 60vh;
     width: 100%;
     position: relative;
     overflow: hidden;
@@ -268,11 +277,14 @@ h1, h2, h3, h4, h5, h6 {
   .schedule-section {
     display: block;
     width: 100%;
-    min-height: 50vh;
+    min-height: 30vh;
     height: auto;
     overflow-y: auto;
     grid-column: 1;
     grid-row: 3;
+    padding: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+  }
     border-top: 1px solid #e0e0e0;
     padding: 1.5rem;
   }
