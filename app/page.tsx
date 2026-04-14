@@ -20,14 +20,14 @@ export default function HomePage() {
         <div className="relative z-10 w-full px-6 flex items-center justify-center">
           <div className="text-center max-w-2xl">
             <div className="mb-8">
-              <h1 className="text-5xl font-bold mb-4 text-fpuCyan">
+              <h1 className="text-4xl md:text-5xl font-bold mb-4 text-fpuCyan">
                 MicroTransit Tracker
               </h1>
-              <p className="text-xl text-gray-100 mb-2">
-                Real-Time GPS Tracking for Florida Poly
+              <p className="text-lg md:text-xl text-gray-100 mb-2">
+                Track your campus shuttle in real time
               </p>
-              <p className="text-gray-200">
-                Live map updates every 2 seconds
+              <p className="text-sm md:text-base text-gray-200">
+                Never miss your ride again
               </p>
             </div>
 
@@ -35,7 +35,7 @@ export default function HomePage() {
               href="/map"
               className="inline-block px-8 py-3 bg-fpuCyan text-white rounded-lg font-semibold hover:bg-fpuLight hover:shadow-lg transition-all transform hover:scale-105"
             >
-              View Live Map
+              🚍 Open Live Tracker
             </Link>
 
             <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto text-sm">

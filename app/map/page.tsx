@@ -23,8 +23,8 @@ export default function MapPage() {
       <Header />
       <main className="map-layout">
         <aside className="sidebar">
-          <Link href="/" className="mb-4 inline-block px-4 py-2 bg-fpuPurple text-white rounded-lg font-semibold hover:bg-fpuDark transition">
-            ← Back
+          <Link href="/" className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-fpuPurple text-white rounded-lg font-semibold hover:bg-fpuDark transition">
+            ← Home
           </Link>
           <h2>Device Status</h2>
           <ConnectionBadge connected={connected} />

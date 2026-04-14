@@ -53,12 +53,12 @@ export default function DeviceStatusPanel({ deviceId, location }: DeviceStatusPa
 
         <div className="flex justify-between">
           <span className="text-fpuMedium font-medium">Speed:</span>
-          <span className="text-fpuPurple font-mono">{location?.speed?.toFixed(1) ?? "-"} km/h</span>
+          <span className="text-fpuPurple font-mono">{location?.speed !== undefined && location?.speed !== null ? `${location.speed.toFixed(1)} km/h` : "Acquiring GPS..."}</span>
         </div>
 
         <div className="flex justify-between">
           <span className="text-fpuMedium font-medium">Accuracy:</span>
-          <span className="text-fpuPurple font-mono">{location?.accuracy?.toFixed(1) ?? "-"} m</span>
+          <span className="text-fpuPurple font-mono">{location?.accuracy !== undefined && location?.accuracy !== null ? `±${location.accuracy.toFixed(1)}m` : "Acquiring GPS..."}</span>
         </div>
 
         <div className="flex justify-between">
@@ -80,9 +80,18 @@ export default function DeviceStatusPanel({ deviceId, location }: DeviceStatusPa
 
       <div className="text-xs text-fpuMedium bg-fpuBg rounded p-3 border border-fpuLight">
         <p className="font-medium mb-2">Speed Legend:</p>
-        <p>0-5 km/h = Stopped</p>
-        <p> 5-25 km/h = Moving</p>
-        <p>[RED_DOT] 25+ km/h = Fast</p>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          <p>0-5 km/h = Stopped</p>
+        </div>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+          <p>5-25 km/h = Moving</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+          <p>25+ km/h = Fast</p>
+        </div>
       </div>
     </div>
   );

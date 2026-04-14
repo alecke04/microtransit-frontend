@@ -58,14 +58,14 @@ export default function SchedulePanel({ deviceId }: { deviceId: string }) {
           } catch (upcomingError) {
             // Both failed
             if (active) {
-              setError("No schedule available");
+              setError("Schedule coming soon");
               setData(null);
             }
           }
         }
       } catch (err) {
         if (active) {
-          setError("Schedule unavailable");
+          setError("Schedule coming soon");
         }
       }
     };
@@ -80,7 +80,7 @@ export default function SchedulePanel({ deviceId }: { deviceId: string }) {
   }, [deviceId]);
 
   if (error) {
-    return <div className="text-sm text-red-600">{error}</div>;
+    return <div className="text-sm text-fpuMedium italic">{error}</div>;
   }
 
   if (!data) {
