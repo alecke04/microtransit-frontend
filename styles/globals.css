@@ -232,34 +232,30 @@ h1, h2, h3, h4, h5, h6 {
 
 @media (max-width: 900px) {
   .map-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     min-height: auto;
+    height: 100vh;
+    overflow-y: auto;
   }
 
   .sidebar {
     border-right: 0;
-    border-bottom: 1px solid #e0e0e0;
-    max-height: none;
-    overflow-y: auto;
-  }
-
-  .map-and-schedule {
-    flex-direction: column;
+    border-top: 1px solid #e0e0e0;
+    border-bottom: none;
     height: auto;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
+    padding: 1.5rem;
+    order: 2;
+    flex-shrink: 0;
   }
 
   .map-section {
-    flex: 0 0 100vh;
-    min-height: 100vh;
+    height: 100vh;
     position: relative;
     overflow: hidden;
-  }
-
-  .schedule-section {
-    flex: 0 0 auto;
-    min-height: auto;
-    max-height: none;
-    overflow-y: auto;
+    order: 1;
+    flex-shrink: 0;
   }
 }
