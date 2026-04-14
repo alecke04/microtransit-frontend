@@ -27,7 +27,7 @@ export default function HomePage() {
                 Track your campus shuttle in real time
               </p>
               <p className="text-sm md:text-base text-gray-200">
-                Never miss your ride again
+                Know exactly when it arrives
               </p>
             </div>
 
@@ -35,7 +35,7 @@ export default function HomePage() {
               href="/map"
               className="inline-block px-8 py-3 bg-fpuCyan text-white rounded-lg font-semibold hover:bg-fpuLight hover:shadow-lg transition-all transform hover:scale-105"
             >
-              🚍 Open Live Tracker
+              Open Live Tracker
             </Link>
 
             <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto text-sm">

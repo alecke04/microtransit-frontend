@@ -496,25 +496,7 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
           {safeMarkerData.speed.toFixed(1)} km/h
         </div>
 
-        {/* Connection status */}
-        <div
-          style={{
-            backgroundColor: connected ? '#f0fdf4' : '#fef2f2',
-            border: `2px solid ${connected ? '#10b981' : '#ef4444'}`,
-            color: connected ? '#059669' : '#dc2626',
-            padding: '8px 14px',
-            borderRadius: '10px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-            textAlign: 'center',
-            transition: 'all 0.2s ease',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            letterSpacing: '0.3px',
-          }}
-        >
-          {connected ? ' Connected' : ' Disconnected'}
-        </div>
+
       </div>
     </div>
   );

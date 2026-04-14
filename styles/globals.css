@@ -62,13 +62,15 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar {
   padding: 1.5rem;
   border-right: 1px solid #e0e0e0;
-  background: #ffffff;
+  background: #fafbfc;
   color: #000000;
   overflow-y: auto;
   max-height: 100vh;
   box-sizing: border-box;
   pointer-events: auto;
   z-index: 40;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar h2 {
@@ -102,97 +104,6 @@ h1, h2, h3, h4, h5, h6 {
   background: #ffffff;
   z-index: 1;
   pointer-events: auto;
-}
-
-/* Pulsing marker animation */
-@keyframes pulse {
-  0% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
-  }
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-  }
-}
-
-.marker-pulse {
-  animation: pulse 2s infinite;
-}
-
-.map .leaflet-marker-pane,
-.map .leaflet-shadow-pane,
-.map .leaflet-overlay-pane {
-  z-index: 400;
-}
-
-.map .leaflet-pane {
-  z-index: 1;
-}
-
-.map .leaflet-tile-pane {
-  z-index: 2;
-}
-
-.map .leaflet-overlay-pane {
-  z-index: 400;
-}
-
-.map .leaflet-marker-pane {
-  z-index: 600;
-}
-
-.map .leaflet-popup-pane {
-  z-index: 700;
-}
-
-.map .leaflet-tooltip-pane {
-  z-index: 650;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.875rem;
-  border-radius: 9999px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 1rem;
-  transition: all 0.3s ease;
-}
-
-.connected {
-  background: linear-gradient(135deg, #ff5000 0%, #ff7030 100%);
-  color: white;
-  box-shadow: 0 0 15px rgba(255, 80, 0, 0.4);
-}
-
-.connected::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: white;
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-
-.disconnected {
-  background: #374151;
-  color: #e5e7eb;
-}
-
-.disconnected::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: #d97706;
-  border-radius: 50%;
 }
 
 @keyframes pulse {
@@ -234,4 +145,17 @@ h1, h2, h3, h4, h5, h6 {
     border-right: 0;
     border-bottom: 1px solid #1e293b;
   }
+}
+
+/* Card styling for panels */
+.panel-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.panel-card:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
