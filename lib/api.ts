@@ -35,6 +35,7 @@ export interface TodayScheduleResponse {
   on_time_status: string;
   status_delta_minutes: number | null;
   last_seen_seconds: number | null;
+  estimated_arrival_minutes: number | null;
 }
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
