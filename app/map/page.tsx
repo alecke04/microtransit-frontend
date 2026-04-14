@@ -29,7 +29,6 @@ export default function MapPage() {
           <h2>Device Status</h2>
           <ConnectionBadge connected={connected} />
           <DeviceStatusPanel deviceId={deviceId} location={location} />
-          <SchedulePanel deviceId={deviceId} />
         </aside>
         <section className="map-section">
           <MapView 
@@ -37,6 +36,9 @@ export default function MapPage() {
             onConnectionChange={setConnected}
             onLocationUpdate={setLocation}
           />
+        </section>
+        <section className="schedule-section">
+          <SchedulePanel deviceId={deviceId} />
         </section>
       </main>
     </>

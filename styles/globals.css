@@ -55,6 +55,7 @@ h1, h2, h3, h4, h5, h6 {
 .map-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
+  grid-template-rows: auto;
   min-height: 100vh;
   background: #ffffff;
 }
@@ -67,6 +68,8 @@ h1, h2, h3, h4, h5, h6 {
   overflow-y: auto;
   height: 100vh;
   box-sizing: border-box;
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .sidebar h2 {
@@ -78,25 +81,26 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .map-and-schedule {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow-y: auto;
+  display: none;
 }
 
 .map-section {
-  flex: 0 0 100vh;
   position: relative;
   pointer-events: auto;
   overflow: hidden;
+  height: 100vh;
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .schedule-section {
-  flex: 0 0 auto;
+  display: none;
   border-top: 1px solid #e0e0e0;
   background: #ffffff;
   overflow-y: auto;
-  max-height: 40vh;
+  padding: 1.5rem;
+  grid-column: 1 / -1;
+  grid-row: 3;
 }
 
 .map {
@@ -232,9 +236,10 @@ h1, h2, h3, h4, h5, h6 {
 
 @media (max-width: 900px) {
   .map-layout {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 100vh auto;
+    min-height: auto;
     height: auto;
   }
 
@@ -246,7 +251,8 @@ h1, h2, h3, h4, h5, h6 {
     max-height: none;
     overflow-y: visible;
     padding: 1.5rem;
-    order: 2;
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .map-section {
@@ -255,6 +261,19 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     position: relative;
     overflow: hidden;
-    order: 1;
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .schedule-section {
+    display: block;
+    width: 100%;
+    min-height: 50vh;
+    height: auto;
+    overflow-y: auto;
+    grid-column: 1;
+    grid-row: 3;
+    border-top: 1px solid #e0e0e0;
+    padding: 1.5rem;
   }
 }
