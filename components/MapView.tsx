@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import Map from 'react-map-gl/maplibre';
-import { Source, Layer } from 'react-map-gl/maplibre';
+import { Source, Layer, Marker } from 'react-map-gl/maplibre';
 import type { MapRef } from 'react-map-gl/maplibre';
 import type { GeoJSONSource } from 'maplibre-gl';
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -26,13 +26,15 @@ function getMarkerColor(speed: number): string {
 export default function MapView({ deviceId, onConnectionChange, onLocationUpdate }: MapViewProps) {
   const mapRef = useRef<MapRef>(null);
   const [connected, setConnected] = useState(false);
+  const [bearing, setBearing] = useState(0); // Add bearing state for rotation
+  const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null); // Track rotation animation
   const [markerData, setMarkerData] = useState<{
     latitude: number;
     longitude: number;
     speed: number;
   }>({
-    latitude: 28.1517,
-    longitude: -81.8598,
+    latitude: 28.1480,
+    longitude: -81.8484,
     speed: 0,
   });
   const [trailCoords, setTrailCoords] = useState<[number, number][]>([]);
@@ -40,13 +42,13 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
   const [isAnimating, setIsAnimating] = useState(false);
   const pointsRef = useRef<[number, number][]>([]);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentPosRef = useRef({ latitude: 28.1517, longitude: -81.8598, speed: 0 });
+  const currentPosRef = useRef({ latitude: 28.1480, longitude: -81.8484, speed: 0 });
   const lastTrailPointTimeRef = useRef(0); // Track when trail points are actually added
 
   // Ensure marker data is never NaN
   const safeMarkerData = {
-    latitude: isFinite(markerData.latitude) ? markerData.latitude : 28.1517,
-    longitude: isFinite(markerData.longitude) ? markerData.longitude : -81.8598,
+    latitude: isFinite(markerData.latitude) ? markerData.latitude : 28.1480,
+    longitude: isFinite(markerData.longitude) ? markerData.longitude : -81.8484,
     speed: isFinite(markerData.speed) ? markerData.speed : 0,
   };
 
@@ -153,8 +155,8 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
             speed,
           });
           console.log('safeMarkerData will be:', {
-            latitude: isFinite(endLat) ? endLat : 28.1517,
-            longitude: isFinite(endLng) ? endLng : -81.8598,
+            latitude: isFinite(endLat) ? endLat : 28.1480,
+            longitude: isFinite(endLng) ? endLng : -81.8484,
             speed: isFinite(speed) ? speed : 0,
           });
           setIsAnimating(false);
@@ -273,6 +275,19 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
         } catch (fallbackErr) {
           console.error('Unable to load device history - backend mock mode may not be enabled:', fallbackErr);
           setConnection(false);
+          
+          // Ensure marker is visible at default location even if backend is offline
+          const defaultLat = 28.1480;
+          const defaultLon = -81.8484;
+          console.log('🔴 OFFLINE FALLBACK: Initializing marker at:', { latitude: defaultLat, longitude: defaultLon });
+          setMarkerData({
+            latitude: defaultLat,
+            longitude: defaultLon,
+            speed: 0,
+          });
+          pointsRef.current = [[defaultLat, defaultLon]];
+          setTrailCoords([[defaultLat, defaultLon]]);
+          console.log('✅ Marker data set. MarkerData state:', { latitude: defaultLat, longitude: defaultLon, speed: 0 });
         }
       }
     };
@@ -287,6 +302,44 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
       }
     };
   }, [deviceId, onConnectionChange, onLocationUpdate]);
+
+  // Rotation effect - continuously rotate the map bearing around the marker
+  useEffect(() => {
+    let disposed = false;
+
+    // Start rotation animation - 360 degrees over 120 seconds for smooth rotation
+    const rotationDuration = 120000; // 120 seconds for full rotation
+    const startTime = Date.now();
+
+    const rotateMap = () => {
+      if (disposed) return;
+
+      const elapsed = (Date.now() - startTime) % rotationDuration;
+      const newBearing = (elapsed / rotationDuration) * 360;
+
+      setBearing(newBearing);
+
+      // Update map bearing while it rotates
+      if (mapRef.current) {
+        mapRef.current.easeTo({
+          bearing: newBearing,
+          duration: 50,
+          essential: true,
+        });
+      }
+
+      rotationIntervalRef.current = requestAnimationFrame(rotateMap);
+    };
+
+    rotationIntervalRef.current = requestAnimationFrame(rotateMap) as unknown as NodeJS.Timeout;
+
+    return () => {
+      disposed = true;
+      if (rotationIntervalRef.current) {
+        cancelAnimationFrame(rotationIntervalRef.current as unknown as number);
+      }
+    };
+  }, []);
 
   // Trail GeoJSON - ONLY shows waypoints the bus has actually visited
   const trailGeoJSON = useMemo(
@@ -304,25 +357,31 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
 
   // Marker GeoJSON
   const markerGeoJSON = useMemo(
-    () => ({
-      type: 'Feature' as const,
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [safeMarkerData.longitude, safeMarkerData.latitude],
-      },
-      properties: {
-        speed: safeMarkerData.speed,
-      },
-    }),
+    () => {
+      console.log('Creating markerGeoJSON with safeMarkerData:', safeMarkerData);
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [safeMarkerData.longitude, safeMarkerData.latitude],
+        },
+        properties: {
+          speed: safeMarkerData.speed,
+        },
+      };
+    },
     [safeMarkerData.latitude, safeMarkerData.longitude, safeMarkerData.speed],
   );
 
   // Memoize marker data source
   const markerSourceData = useMemo(
-    () => ({
-      type: 'FeatureCollection' as const,
-      features: [markerGeoJSON],
-    }),
+    () => {
+      console.log('Creating markerSourceData with features:', [markerGeoJSON]);
+      return {
+        type: 'FeatureCollection' as const,
+        features: [markerGeoJSON],
+      };
+    },
     [markerGeoJSON],
   );
 
@@ -347,21 +406,11 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
 
   const markerLayerPaint = useMemo(
     () => ({
-      'circle-radius': 8,
-      'circle-color': [
-        'case',
-        // If speed < 5: green (stopped)
-        ['<', ['get', 'speed'], 5],
-        '#10b981',
-        // If speed < 25: orange (moving)
-        ['<', ['get', 'speed'], 25],
-        '#f97316',
-        // Otherwise: red (fast)
-        '#dc2626',
-      ] as any,
-      'circle-stroke-width': 2,
+      'circle-radius': 20,
+      'circle-color': '#10b981',
+      'circle-stroke-width': 4,
       'circle-stroke-color': '#ffffff',
-      'circle-opacity': 0.85,
+      'circle-opacity': 0.95,
     }),
     [],
   );
@@ -394,15 +443,17 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
   );
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <Map
         ref={mapRef}
         initialViewState={{
-          latitude: 28.1517,
-          longitude: -81.8598,
+          latitude: 28.1480,
+          longitude: -81.8484,
           zoom: 15,
+          pitch: 75, // 75 degree tilt for very steep 3D view
+          bearing: 0,
         }}
-        style={{ width: '100%', height: '100vh' }}
+        style={{ width: '100%', height: '100%' }}
         mapStyle={{
           version: 8,
           sources: {
@@ -422,6 +473,7 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
           ],
         }}
         doubleClickZoom={false}
+        scrollZoom={false}
       >
         {/* Trail layer - show as soon as we have starting point */}
         {trailCoords.length > 0 && (
@@ -434,18 +486,29 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
           </Source>
         )}
 
-        {/* Marker layer */}
-        <Source
-          id="marker"
-          type="geojson"
-          data={markerSourceData}
-        >
-          <Layer
-            id="marker-circle"
-            type="circle"
-            paint={markerLayerPaint}
-          />
-        </Source>
+        {/* Marker using react-map-gl Marker component */}
+        {markerData.latitude && markerData.longitude && (
+          <Marker
+            latitude={markerData.latitude}
+            longitude={markerData.longitude}
+            anchor="center"
+          >
+            <div
+              style={{
+                width: '18px',
+                height: '18px',
+                background: '#10b981',
+                borderRadius: '50%',
+                border: '2px solid white',
+                boxShadow: '0 0 0 1px #10b981, 0 0 6px rgba(16, 185, 129, 0.8)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            />
+          </Marker>
+        )}
 
         {/* Stationary points layer - shows where bus stopped */}
         {stationaryPoints.length > 0 && (

@@ -3,52 +3,45 @@ import Header from "@/components/Header";
 
 export default function HomePage() {
   return (
-    <>
+    <div className="flex flex-col h-screen overflow-hidden">
       <Header />
+      
       <main 
-        className="relative min-h-screen flex items-center justify-center overflow-hidden"
+        className="relative flex-1 flex items-center justify-center"
         style={{ 
           backgroundImage: 'url(/FPU-Img-Campus-13.jpg)',
-          backgroundAttachment: 'fixed',
           backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          backgroundPosition: 'center',
         }}
       >
-        {/* Dark overlay covering entire background */}
-        <div className="absolute inset-0 bg-black/40"></div>
+        <div className="absolute inset-0 bg-black/50"></div>
         
-        <div className="relative z-10 w-full px-6 flex items-center justify-center">
-          <div className="text-center max-w-2xl">
-            <div className="mb-8">
-              <h1 className="text-4xl md:text-5xl font-bold mb-4 text-fpuCyan">
+        <div className="relative z-10 w-full px-6 text-center">
+          <div className="max-w-2xl mx-auto">
+            <div className="mb-6 md:mb-8">
+              <h1 className="text-3xl md:text-5xl font-bold mb-3 text-fpuCyan uppercase">
                 MicroTransit Tracker
               </h1>
-              <p className="text-lg md:text-xl text-gray-100 mb-2">
+              <p className="text-base md:text-xl text-gray-100">
                 Track your campus shuttle in real time
-              </p>
-              <p className="text-sm md:text-base text-gray-200">
-                Know exactly when it arrives
               </p>
             </div>
 
             <Link
               href="/map"
-              className="inline-block px-8 py-3 bg-fpuCyan text-white rounded-lg font-semibold hover:bg-fpuLight hover:shadow-lg transition-all transform hover:scale-105"
+              className="inline-block px-8 py-3 bg-fpuCyan text-white rounded-lg font-semibold hover:scale-105 transition-transform"
             >
               Open Live Tracker
             </Link>
 
-            <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto text-sm">
+            <div className="mt-8 md:mt-16 grid grid-cols-3 gap-4 max-w-2xl mx-auto text-[10px] md:text-sm">
               <div>
-                <div className="text-3xl mb-2 text-fpuCyan"></div>
                 <p className="text-gray-100 font-medium">Real-Time Tracking</p>
               </div>
               <div>
-                <div className="text-3xl mb-2 text-fpuCyan"></div>
                 <p className="text-gray-100 font-medium">Historical Data</p>
               </div>
               <div>
-                <div className="text-3xl mb-2 text-fpuCyan"></div>
                 <p className="text-gray-100 font-medium">Live WebSocket</p>
               </div>
             </div>
@@ -56,16 +49,16 @@ export default function HomePage() {
         </div>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 py-6">
-        <div className="w-full px-6 text-center">
-          <p className="text-sm text-gray-600">
-            Made with <span className="text-fpuCyan font-semibold">Next.js</span> and <span className="text-fpuCyan font-semibold">FastAPI</span>
+      <footer className="flex-shrink-0 bg-white border-t border-gray-100 py-2 md:py-3">
+        <div className="w-full px-4 text-center">
+          <p className="text-[9px] md:text-xs text-gray-500 leading-none mb-1">
+            Made with <span className="text-fpuCyan font-bold">Next.js</span> & <span className="text-fpuCyan font-bold">FastAPI</span>
           </p>
-          <p className="text-xs text-gray-500 mt-2">
-            © Florida Polytechnic University | MicroTransit Tracking System
+          <p className="text-[8px] md:text-[10px] text-gray-400 leading-none uppercase tracking-tighter">
+            © Florida Poly | MicroTransit System
           </p>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

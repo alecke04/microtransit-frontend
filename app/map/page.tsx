@@ -22,6 +22,7 @@ export default function MapPage() {
     <>
       <Header />
       <main className="map-layout">
+        {/* Left Sidebar - Device Status */}
         <aside className="sidebar">
           <Link href="/" className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-fpuPurple text-white rounded-lg font-semibold hover:bg-fpuDark transition">
             ← Home
@@ -30,6 +31,8 @@ export default function MapPage() {
           <ConnectionBadge connected={connected} />
           <DeviceStatusPanel deviceId={deviceId} location={location} />
         </aside>
+
+        {/* Center - Map */}
         <section className="map-section">
           <MapView 
             deviceId={deviceId} 
@@ -37,9 +40,12 @@ export default function MapPage() {
             onLocationUpdate={setLocation}
           />
         </section>
-        <section className="schedule-section">
+
+        {/* Right Sidebar - Schedule */}
+        <aside className="sidebar right">
+          <h2>Schedule</h2>
           <SchedulePanel deviceId={deviceId} />
-        </section>
+        </aside>
       </main>
     </>
   );

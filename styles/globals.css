@@ -8,7 +8,11 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  height: 100vh;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -21,6 +25,10 @@ body {
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   text-size-adjust: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -54,10 +62,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .map-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  grid-template-rows: auto;
-  min-height: 100vh;
+  grid-template-columns: 320px 1fr 320px;
+  grid-template-rows: 1fr;
+  flex: 1;
   background: #ffffff;
+  max-width: 100vw;
+  width: 100%;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -66,10 +77,17 @@ h1, h2, h3, h4, h5, h6 {
   background: #ffffff;
   color: #000000;
   overflow-y: auto;
-  height: 100vh;
+  overflow-x: hidden;
+  height: 100%;
   box-sizing: border-box;
   grid-column: 1;
   grid-row: 1;
+}
+
+.sidebar.right {
+  border-right: none;
+  border-left: 1px solid #e0e0e0;
+  grid-column: 3;
 }
 
 .sidebar h2 {
@@ -83,9 +101,7 @@ h1, h2, h3, h4, h5, h6 {
 .map-and-schedule {
   display: flex;
   flex-direction: column;
-  height: auto;
-  max-height: 100vh;
-  overflow-y: auto;
+  height: 100%;
   grid-column: 2;
   grid-row: 1;
 }
@@ -95,17 +111,21 @@ h1, h2, h3, h4, h5, h6 {
   pointer-events: auto;
   overflow: hidden;
   flex: 1;
-  min-height: 55vh;
+  width: 100%;
+  height: 100%;
 }
 
 .schedule-section {
   display: block;
-  border-top: 1px solid #e0e0e0;
   background: #ffffff;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.5rem;
-  min-height: 30vh;
-  flex-shrink: 0;
+  grid-column: 3;
+  grid-row: 1;
+  border-left: 1px solid #e0e0e0;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .map {
@@ -235,17 +255,34 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-.maplibregl-canvas {
-  filter: var(--pulse, none);
-}
-
 @media (max-width: 900px) {
+  html {
+    height: auto;
+    overflow: visible;
+  }
+
+  body {
+    overflow: visible;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  main {
+    /* Don't override flex-1 from Tailwind */
+  }
+
   .map-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
     min-height: auto;
     height: auto;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   .sidebar {
@@ -254,14 +291,23 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     height: auto;
     max-height: none;
-    overflow-y: visible;
+    overflow-y: auto;
     padding: 1.5rem;
-    grid-column: 1;
-    grid-row: 1;
+    order: 1;
+  }
+
+  .sidebar.right {
+    border-left: 0;
+    border-bottom: none;
+    border-top: 1px solid #e0e0e0;
+    order: 3;
   }
 
   .map-and-schedule {
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    order: 2;
   }
 
   .map-section {
@@ -270,8 +316,8 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     position: relative;
     overflow: hidden;
-    grid-column: 1;
-    grid-row: 2;
+    flex: 0 0 auto;
+    order: 2;
   }
 
   .schedule-section {
@@ -280,10 +326,12 @@ h1, h2, h3, h4, h5, h6 {
     min-height: auto;
     height: auto;
     overflow-y: auto;
-    grid-column: 1;
-    grid-row: 3;
-    padding: 0.5rem 1.5rem 1.5rem 1.5rem;
-    border-top: none;
-    background: transparent;
+    padding: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+    border-left: none;
+    background: #ffffff;
+    clear: both;
+    flex: 0 0 auto;
+    order: 3;
   }
 }
