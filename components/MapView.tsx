@@ -306,10 +306,20 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
   // Rotation effect - continuously rotate the map bearing around the marker
   useEffect(() => {
     let disposed = false;
+    let startTime = Date.now();
 
     // Start rotation animation - 360 degrees over 120 seconds for smooth rotation
     const rotationDuration = 120000; // 120 seconds for full rotation
-    const startTime = Date.now();
+
+    // Handle tab visibility changes to prevent speed-up when returning from background
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tab just became visible - reset the start time to prevent time-jump
+        startTime = Date.now();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const rotateMap = () => {
       if (disposed) return;
@@ -319,13 +329,10 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
 
       setBearing(newBearing);
 
-      // Update map bearing while it rotates
+      // Update map bearing directly without animation to prevent stuttering
+      // (easeTo with overlapping animations causes glitching)
       if (mapRef.current) {
-        mapRef.current.easeTo({
-          bearing: newBearing,
-          duration: 50,
-          essential: true,
-        });
+        mapRef.current.setBearing(newBearing);
       }
 
       rotationIntervalRef.current = requestAnimationFrame(rotateMap);
@@ -335,6 +342,7 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
 
     return () => {
       disposed = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (rotationIntervalRef.current) {
         cancelAnimationFrame(rotationIntervalRef.current as unknown as number);
       }
@@ -449,7 +457,7 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
         initialViewState={{
           latitude: 28.1480,
           longitude: -81.8484,
-          zoom: 15,
+          zoom: 16,
           pitch: 75, // 75 degree tilt for very steep 3D view
           bearing: 0,
         }}
@@ -495,8 +503,8 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
           >
             <div
               style={{
-                width: '18px',
-                height: '18px',
+                width: '12px',
+                height: '12px',
                 background: '#10b981',
                 borderRadius: '50%',
                 border: '2px solid white',
@@ -526,41 +534,6 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
         )}
       </Map>
 
-      {/* Status badges container - moved to bottom-right */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '20px',
-          right: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          pointerEvents: 'none',
-          zIndex: 100,
-        }}
-      >
-        {/* Speed indicator */}
-        <div
-          style={{
-            backgroundColor: 'white',
-            border: `3px solid ${getMarkerColor(safeMarkerData.speed)}`,
-            color: getMarkerColor(safeMarkerData.speed),
-            padding: '10px 16px',
-            borderRadius: '12px',
-            fontWeight: 'bold',
-            fontSize: '16px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            minWidth: '120px',
-            textAlign: 'center',
-            transition: 'all 0.2s ease',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-          }}
-        >
-          {safeMarkerData.speed.toFixed(1)} km/h
-        </div>
-
-
-      </div>
     </div>
   );
 }
