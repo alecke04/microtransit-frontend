@@ -46,11 +46,11 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
   const lastTrailPointTimeRef = useRef(0); // Track when trail points are actually added
 
   // Ensure marker data is never NaN
-  const safeMarkerData = {
+  const safeMarkerData = useMemo(() => ({
     latitude: isFinite(markerData.latitude) ? markerData.latitude : 28.1480,
     longitude: isFinite(markerData.longitude) ? markerData.longitude : -81.8484,
     speed: isFinite(markerData.speed) ? markerData.speed : 0,
-  };
+  }), [markerData.latitude, markerData.longitude, markerData.speed]);
 
   useEffect(() => {
     let disposed = false;
