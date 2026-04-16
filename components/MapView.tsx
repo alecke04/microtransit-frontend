@@ -27,7 +27,7 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
   const mapRef = useRef<MapRef>(null);
   const [connected, setConnected] = useState(false);
   const [bearing, setBearing] = useState(0); // Add bearing state for rotation
-  const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null); // Track rotation animation
+  const rotationIntervalRef = useRef<number | null>(null); // Track rotation animation
   const [markerData, setMarkerData] = useState<{
     latitude: number;
     longitude: number;
@@ -338,13 +338,13 @@ export default function MapView({ deviceId, onConnectionChange, onLocationUpdate
       rotationIntervalRef.current = requestAnimationFrame(rotateMap);
     };
 
-    rotationIntervalRef.current = requestAnimationFrame(rotateMap) as unknown as NodeJS.Timeout;
+    rotationIntervalRef.current = requestAnimationFrame(rotateMap);
 
     return () => {
       disposed = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (rotationIntervalRef.current) {
-        cancelAnimationFrame(rotationIntervalRef.current as unknown as number);
+      if (rotationIntervalRef.current !== null) {
+        cancelAnimationFrame(rotationIntervalRef.current);
       }
     };
   }, []);
