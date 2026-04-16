@@ -14,12 +14,12 @@ export default function HomePage() {
           backgroundPosition: 'center',
         }}
       >
-        <div className="absolute inset-0 bg-black/50"></div>
+        <div className="absolute inset-0" style={{ background: 'rgba(0, 0, 0, 0.42)' }}></div>
         
         <div className="relative z-10 w-full px-6 text-center">
           <div className="max-w-2xl mx-auto">
-            <div className="mb-6 md:mb-8">
-              <h1 className="text-3xl md:text-5xl font-bold mb-3 text-fpuCyan uppercase">
+            <div className="mb-6 md:mb-8 relative">
+              <h1 className="text-3xl md:text-5xl font-bold mb-3 text-fpuCyan uppercase" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.35)' }}>
                 MicroTransit Tracker
               </h1>
               <p className="text-base md:text-xl text-gray-100">
