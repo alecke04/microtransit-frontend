@@ -1,6 +1,7 @@
 import "@/styles/globals.css";
 
 import type { Metadata } from "next";
+import type { Viewport } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
@@ -9,6 +10,13 @@ export const metadata: Metadata = {
   icons: {
     icon: '/cropped-cropped-FLPolyMarkLogo_Browser-192x192.webp',
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
