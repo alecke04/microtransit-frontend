@@ -480,7 +480,7 @@ export default function MapView({
         initialViewState={{
           latitude: DEFAULT_POSITION.latitude,
           longitude: DEFAULT_POSITION.longitude,
-          zoom: 16,
+          zoom: 15.85,
           pitch: 62,
           bearing: 0,
         }}
