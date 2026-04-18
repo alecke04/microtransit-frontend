@@ -14,7 +14,7 @@ import type { LocationUpdateMessage } from "@/lib/websocket";
 type MapViewProps = {
   deviceId: string;
   onConnectionChange?: (connected: boolean) => void;
-  onLocationUpdate?: (data: LocationUpdateMessage) => void;
+  onLocationUpdate?: (data: LocationUpdateMessage | null) => void;
 };
 
 const DEFAULT_POSITION = {
@@ -22,11 +22,64 @@ const DEFAULT_POSITION = {
   longitude: -81.8484,
   speed: 0,
 };
+const GPS_STALE_MS = 30_000;
+
+const MARKER_IMAGES = {
+  "vehicle-marker-green": "#10b981",
+  "vehicle-marker-orange": "#f97316",
+  "vehicle-marker-red": "#dc2626",
+} as const;
+
+type MarkerImageId = keyof typeof MARKER_IMAGES;
 
 function getMarkerColor(speed: number): string {
   if (speed < 5) return "#10b981";
   if (speed < 25) return "#f97316";
   return "#dc2626";
+}
+
+function createMarkerImage(id: MarkerImageId): Promise<HTMLImageElement> {
+  const fill = MARKER_IMAGES[id];
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88">
+      <defs>
+        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="10" stdDeviation="7" flood-color="rgba(0,0,0,0.30)"/>
+        </filter>
+        <linearGradient id="body" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="${fill}" stop-opacity="0.98"/>
+          <stop offset="62%" stop-color="${fill}" stop-opacity="1"/>
+          <stop offset="100%" stop-color="${fill}" stop-opacity="0.9"/>
+        </linearGradient>
+      </defs>
+      <g filter="url(#shadow)">
+        <circle cx="44" cy="44" r="26" fill="url(#body)" stroke="#ffffff" stroke-width="3"/>
+        <circle cx="44" cy="44" r="31" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>
+        <ellipse cx="33" cy="30" rx="10" ry="6" fill="rgba(255,255,255,0.38)" transform="rotate(-25 33 30)"/>
+        <circle cx="44" cy="44" r="15" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+      </g>
+    </svg>
+  `.trim();
+
+  return new Promise((resolve, reject) => {
+    const image = new Image(88, 88);
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+}
+
+function getLocationTimeMs(point: { timestamp?: number; created_at?: string }): number | null {
+  if (Number.isFinite(point.timestamp)) {
+    return point.timestamp! > 1_000_000_000_000 ? point.timestamp! : point.timestamp! * 1000;
+  }
+
+  if (point.created_at) {
+    const parsed = Date.parse(point.created_at);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 export default function MapView({
@@ -38,6 +91,7 @@ export default function MapView({
   const pointsRef = useRef<[number, number][]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const staleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPosRef = useRef(DEFAULT_POSITION);
   const rotationFrameRef = useRef<number | null>(null);
   const rotationSpeedRef = useRef(0.004);
@@ -56,6 +110,7 @@ export default function MapView({
   const [trailCoords, setTrailCoords] = useState<[number, number][]>([]);
   const [stationaryPoints, setStationaryPoints] = useState<[number, number, number][]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [markerImagesReady, setMarkerImagesReady] = useState(false);
 
   const safeMarkerData = useMemo(
     () => ({
@@ -72,6 +127,37 @@ export default function MapView({
 
     const setConnection = (value: boolean) => {
       onConnectionChange?.(value);
+    };
+
+    const resetToDefaultMarker = () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      pointsRef.current = [];
+      currentPosRef.current = DEFAULT_POSITION;
+      setTrailCoords([]);
+      setStationaryPoints([]);
+      setMarkerData(DEFAULT_POSITION);
+      onLocationUpdate?.(null);
+
+      if (mapRef.current) {
+        mapRef.current.jumpTo({
+          center: [DEFAULT_POSITION.longitude, DEFAULT_POSITION.latitude],
+        });
+      }
+    };
+
+    const restartStaleTimer = () => {
+      if (staleTimeoutRef.current) {
+        clearTimeout(staleTimeoutRef.current);
+      }
+
+      staleTimeoutRef.current = setTimeout(() => {
+        staleTimeoutRef.current = null;
+        resetToDefaultMarker();
+      }, GPS_STALE_MS);
     };
 
     const updateTrail = (latlng: [number, number], speed: number) => {
@@ -151,6 +237,7 @@ export default function MapView({
 
       if (message) {
         onLocationUpdate?.(message);
+        restartStaleTimer();
       }
     };
 
@@ -184,45 +271,73 @@ export default function MapView({
       );
     };
 
-    const seedInitialPosition = (latlng: [number, number]) => {
-      pointsRef.current = [latlng];
+    const seedInitialPosition = (coords: [number, number][]) => {
+      const latest = coords[coords.length - 1] ?? [DEFAULT_POSITION.latitude, DEFAULT_POSITION.longitude];
+
+      pointsRef.current = coords;
       currentPosRef.current = {
-        latitude: latlng[0],
-        longitude: latlng[1],
+        latitude: latest[0],
+        longitude: latest[1],
         speed: 0,
       };
-      setTrailCoords([latlng]);
+      setTrailCoords(coords);
       setMarkerData(currentPosRef.current);
+
+      if (coords.length > 0) {
+        restartStaleTimer();
+      }
     };
 
     const loadHistory = async () => {
       try {
         const useMockMode = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
         const historyResponse = await fetchDeviceHistory(deviceId, 100, useMockMode);
+        const now = Date.now();
         const coords = historyResponse.locations
+          .filter((p) => {
+            const pointTime = getLocationTimeMs(p);
+            return (
+              pointTime !== null &&
+              now - pointTime <= GPS_STALE_MS &&
+              Number.isFinite(p.latitude) &&
+              Number.isFinite(p.longitude)
+            );
+          })
           .map((p) => [p.latitude, p.longitude] as [number, number])
           .reverse();
 
         if (coords.length > 0) {
-          seedInitialPosition(coords[coords.length - 1]);
+          seedInitialPosition(coords);
+        } else {
+          resetToDefaultMarker();
         }
       } catch (primaryError) {
         console.warn("[MapView] Primary history load failed, retrying with mock mode", primaryError);
 
         try {
           const historyResponse = await fetchDeviceHistory(deviceId, 100, true);
+          const now = Date.now();
           const coords = historyResponse.locations
+            .filter((p) => {
+              const pointTime = getLocationTimeMs(p);
+              return (
+                pointTime !== null &&
+                now - pointTime <= GPS_STALE_MS &&
+                Number.isFinite(p.latitude) &&
+                Number.isFinite(p.longitude)
+              );
+            })
             .map((p) => [p.latitude, p.longitude] as [number, number])
             .reverse();
 
           if (coords.length > 0) {
-            seedInitialPosition(coords[coords.length - 1]);
+            seedInitialPosition(coords);
           } else {
-            seedInitialPosition([DEFAULT_POSITION.latitude, DEFAULT_POSITION.longitude]);
+            resetToDefaultMarker();
           }
         } catch (fallbackError) {
           console.error("[MapView] Unable to load history, using default marker position", fallbackError);
-          seedInitialPosition([DEFAULT_POSITION.latitude, DEFAULT_POSITION.longitude]);
+          resetToDefaultMarker();
         }
       }
 
@@ -236,6 +351,10 @@ export default function MapView({
 
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+      }
+
+      if (staleTimeoutRef.current) {
+        clearTimeout(staleTimeoutRef.current);
       }
 
       if (animationFrameRef.current !== null) {
@@ -282,42 +401,32 @@ export default function MapView({
 
     const map = mapRef.current.getMap();
 
-    const registerMarkerImage = (id: string, fill: string) => {
+    const registerMarkerImage = async (id: MarkerImageId) => {
       if (map.hasImage(id)) return;
 
-      const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88">
-          <defs>
-            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="10" stdDeviation="7" flood-color="rgba(0,0,0,0.30)"/>
-            </filter>
-            <linearGradient id="body" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stop-color="${fill}" stop-opacity="0.98"/>
-              <stop offset="62%" stop-color="${fill}" stop-opacity="1"/>
-              <stop offset="100%" stop-color="${fill}" stop-opacity="0.9"/>
-            </linearGradient>
-          </defs>
-          <g filter="url(#shadow)">
-            <circle cx="44" cy="44" r="26" fill="url(#body)" stroke="#ffffff" stroke-width="3"/>
-            <circle cx="44" cy="44" r="31" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>
-            <ellipse cx="33" cy="30" rx="10" ry="6" fill="rgba(255,255,255,0.38)" transform="rotate(-25 33 30)"/>
-            <circle cx="44" cy="44" r="15" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
-          </g>
-        </svg>
-      `.trim();
-
-      const image = new Image(88, 88);
-      image.onload = () => {
-        if (!map.hasImage(id)) {
-          map.addImage(id, image, { pixelRatio: 2 });
-        }
-      };
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = await createMarkerImage(id);
+      if (!map.hasImage(id)) {
+        map.addImage(id, image, { pixelRatio: 2 });
+      }
     };
 
-    registerMarkerImage("vehicle-marker-green", "#10b981");
-    registerMarkerImage("vehicle-marker-orange", "#f97316");
-    registerMarkerImage("vehicle-marker-red", "#dc2626");
+    const handleStyleImageMissing = (event: { id: string }) => {
+      if (!(event.id in MARKER_IMAGES)) return;
+      void registerMarkerImage(event.id as MarkerImageId);
+    };
+
+    map.on("styleimagemissing", handleStyleImageMissing);
+
+    Promise.all((Object.keys(MARKER_IMAGES) as MarkerImageId[]).map(registerMarkerImage))
+      .then(() => setMarkerImagesReady(true))
+      .catch((error) => {
+        console.error("[MapView] Unable to register marker images", error);
+        setMarkerImagesReady(false);
+      });
+
+    return () => {
+      map.off("styleimagemissing", handleStyleImageMissing);
+    };
   }, [mapLoaded]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -516,7 +625,7 @@ export default function MapView({
           </Source>
         )}
 
-        {safeMarkerData.latitude && safeMarkerData.longitude && (
+        {markerImagesReady && safeMarkerData.latitude && safeMarkerData.longitude && (
           <Source id="vehicle-marker" type="geojson" data={markerSourceData}>
             <Layer id="vehicle-marker-symbol" type="symbol" layout={markerLayerLayout} />
           </Source>

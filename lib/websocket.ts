@@ -9,7 +9,6 @@ export interface LocationUpdateMessage {
 }
 
 const wsBase = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
-const apiKey = process.env.NEXT_PUBLIC_API_KEY ?? "replace-me";
 
 // Track message frequency for diagnostics
 let lastLocationUpdateTime = 0;
@@ -20,7 +19,7 @@ export function openDeviceSocket(
   onStatusChange: (connected: boolean) => void,
 ): WebSocket {
   // One socket per viewed device keeps frontend logic straightforward.
-  const socket = new WebSocket(`${wsBase}/ws/${deviceId}?api_key=${encodeURIComponent(apiKey)}`);
+  const socket = new WebSocket(`${wsBase}/ws/${deviceId}`);
 
   socket.onopen = () => {
     console.log('[CHECK] WebSocket connected');

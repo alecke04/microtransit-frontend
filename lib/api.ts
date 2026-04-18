@@ -39,7 +39,6 @@ export interface TodayScheduleResponse {
 }
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const apiKey = process.env.NEXT_PUBLIC_API_KEY ?? "replace-me";
 
 export async function fetchDeviceHistory(deviceId: string, limit = 100, useMock = false): Promise<LocationListResponse> {
   // Grabs recent points so the map can render route history on initial load.
@@ -50,13 +49,7 @@ export async function fetchDeviceHistory(deviceId: string, limit = 100, useMock 
     url.searchParams.set('mock', 'true');
   }
   
-  const response = await fetch(url.toString(), {
-    headers: {
-      // Replace with your actual key from backend env during local testing.
-      "X-API-Key": apiKey,
-    },
-    cache: "no-store",
-  });
+  const response = await fetch(url.toString(), { cache: "no-store" });
 
   if (!response.ok) {
     throw new Error(`History request failed: ${response.status}`);
@@ -66,12 +59,7 @@ export async function fetchDeviceHistory(deviceId: string, limit = 100, useMock 
 }
 
 export async function fetchTodaySchedule(deviceId: string): Promise<TodayScheduleResponse> {
-  const response = await fetch(`${apiBase}/api/schedule/${deviceId}/today`, {
-    headers: {
-      "X-API-Key": apiKey,
-    },
-    cache: "no-store",
-  });
+  const response = await fetch(`${apiBase}/api/schedule/${deviceId}/today`, { cache: "no-store" });
 
   if (!response.ok) {
     throw new Error(`Schedule request failed: ${response.status}`);
@@ -81,12 +69,7 @@ export async function fetchTodaySchedule(deviceId: string): Promise<TodaySchedul
 }
 
 export async function fetchUpcomingSchedule(deviceId: string): Promise<TodayScheduleResponse> {
-  const response = await fetch(`${apiBase}/api/schedule/${deviceId}/upcoming`, {
-    headers: {
-      "X-API-Key": apiKey,
-    },
-    cache: "no-store",
-  });
+  const response = await fetch(`${apiBase}/api/schedule/${deviceId}/upcoming`, { cache: "no-store" });
 
   if (!response.ok) {
     throw new Error(`Upcoming schedule request failed: ${response.status}`);
