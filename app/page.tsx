@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 
 export default function HomePage() {
   return (
-    <div className="flex min-h-dvh flex-col bg-white">
+    <div className="flex h-svh flex-col overflow-hidden bg-white">
       <Header />
       
       <main 
@@ -16,7 +16,7 @@ export default function HomePage() {
       >
         <div className="absolute inset-0" style={{ background: 'rgba(0, 0, 0, 0.42)' }}></div>
         
-        <div className="relative z-10 w-full px-5 py-10 text-center sm:px-6">
+        <div className="relative z-10 w-full px-5 py-6 text-center sm:px-6 sm:py-8">
           <div className="max-w-2xl mx-auto">
             <div className="mb-6 md:mb-8 relative">
               <h1 className="mb-3 text-3xl font-bold uppercase text-fpuCyan sm:text-4xl md:text-5xl" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.35)' }}>

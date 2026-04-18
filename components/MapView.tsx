@@ -42,8 +42,13 @@ export default function MapView({
   const rotationFrameRef = useRef<number | null>(null);
   const rotationSpeedRef = useRef(0.004);
   const targetRotationSpeedRef = useRef(0.004);
-  const touchStateRef = useRef<{ active: boolean; lastX: number | null }>({
+  const interactionStateRef = useRef<{
+    active: boolean;
+    pointerType: "touch" | "mouse" | null;
+    lastX: number | null;
+  }>({
     active: false,
+    pointerType: null,
     lastX: null,
   });
 
@@ -316,33 +321,47 @@ export default function MapView({
   }, [mapLoaded]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== "touch") return;
-    touchStateRef.current = {
-      active: true,
-      lastX: event.clientX,
-    };
-    targetRotationSpeedRef.current = 0.004;
+    if (event.pointerType === "touch") {
+      interactionStateRef.current = {
+        active: true,
+        pointerType: "touch",
+        lastX: event.clientX,
+      };
+      return;
+    }
+
+    if (event.pointerType === "mouse" && event.button === 0) {
+      interactionStateRef.current = {
+        active: true,
+        pointerType: "mouse",
+        lastX: event.clientX,
+      };
+    }
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== "touch" || !touchStateRef.current.active) return;
+    if (!interactionStateRef.current.active) return;
+    if (interactionStateRef.current.pointerType !== event.pointerType) return;
 
-    const { lastX } = touchStateRef.current;
+    const { lastX } = interactionStateRef.current;
     if (lastX === null) {
-      touchStateRef.current.lastX = event.clientX;
+      interactionStateRef.current.lastX = event.clientX;
       return;
     }
 
     const deltaX = event.clientX - lastX;
-    touchStateRef.current.lastX = event.clientX;
+    interactionStateRef.current.lastX = event.clientX;
 
-    const adjustedSpeed = Math.max(-0.03, Math.min(0.03, deltaX * 0.0012));
+    const multiplier = event.pointerType === "mouse" ? 0.0032 : 0.0017;
+    const maxSpeed = event.pointerType === "mouse" ? 0.065 : 0.04;
+    const adjustedSpeed = Math.max(-maxSpeed, Math.min(maxSpeed, deltaX * multiplier));
     targetRotationSpeedRef.current = adjustedSpeed;
   };
 
   const resetTouchRotation = () => {
-    touchStateRef.current = {
+    interactionStateRef.current = {
       active: false,
+      pointerType: null,
       lastX: null,
     };
     targetRotationSpeedRef.current = 0.004;
@@ -447,7 +466,7 @@ export default function MapView({
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        touchAction: "none",
+        touchAction: "pan-y",
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
