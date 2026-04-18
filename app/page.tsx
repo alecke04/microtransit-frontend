@@ -3,11 +3,11 @@ import Header from "@/components/Header";
 
 export default function HomePage() {
   return (
-    <div className="flex h-svh flex-col overflow-hidden bg-white">
+    <div className="fixed inset-0 flex min-h-[100dvh] flex-col overflow-hidden overscroll-none bg-white">
       <Header />
       
       <main 
-        className="relative flex flex-1 items-center justify-center overflow-hidden"
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         style={{ 
           backgroundImage: 'url(/FPU-Img-Campus-13.jpg)',
           backgroundSize: 'cover',
