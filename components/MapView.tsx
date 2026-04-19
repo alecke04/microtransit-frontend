@@ -345,6 +345,12 @@ export default function MapView({
       setTrailCoords(coords);
       setMarkerData(currentPosRef.current);
 
+      if (mapRef.current) {
+        mapRef.current.jumpTo({
+          center: [latest[1], latest[0]],
+        });
+      }
+
       if (coords.length > 0) {
         restartStaleTimer();
       }
