@@ -13,9 +13,15 @@ function formatTime(value: string | null): string {
 
 function formatLastSeen(seconds: number | null): string {
   if (seconds === null) {
-    return "No data yet";
+    return "Waiting for GPS...";
   }
-  return `${seconds}s ago`;
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)}m ago`;
+  }
+  return `${Math.floor(seconds / 3600)}h ago`;
 }
 
 function formatETA(minutes: number | null): string {
@@ -28,7 +34,20 @@ function formatETA(minutes: number | null): string {
   return `${Math.round(minutes)} min`;
 }
 
-export default function SchedulePanel({ deviceId }: { deviceId: string }) {
+function statusClass(status: string): string {
+  if (status === "early") return "text-yellow-600";
+  if (status === "late") return "text-red-600";
+  if (status === "on_time") return "text-green-600";
+  return "text-fpuPurple";
+}
+
+export default function SchedulePanel({
+  deviceId,
+  refreshToken,
+}: {
+  deviceId: string;
+  refreshToken?: number | null;
+}) {
   const [data, setData] = useState<TodayScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUpcoming, setIsUpcoming] = useState(false);
@@ -71,38 +90,72 @@ export default function SchedulePanel({ deviceId }: { deviceId: string }) {
     };
 
     load();
-    const interval = setInterval(load, 15000);
+    const interval = setInterval(load, 3000);
 
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, [deviceId]);
+  }, [deviceId, refreshToken]);
 
   if (error) {
-    return <div className="bg-fpuBg rounded-lg p-4 text-sm text-fpuMedium italic border border-fpuLight">{error}</div>;
+    return <div className="bg-white rounded-lg p-4 text-sm text-gray-600 italic border border-gray-200 shadow-md">{error}</div>;
   }
 
   if (!data) {
-    return <div className="bg-fpuBg rounded-lg p-4 text-sm text-fpuMedium border border-fpuLight">Loading schedule...</div>;
+    return <div className="bg-white rounded-lg p-4 text-sm text-gray-600 border border-gray-200 shadow-md">Loading schedule...</div>;
   }
 
   return (
-    <div className="mt-4 bg-fpuBg rounded-lg p-4 text-sm space-y-2 border border-fpuLight">
-      <h3 className="font-semibold text-fpuPurple">{isUpcoming ? "Upcoming Route" : "Today's Route"}</h3>
-      <p><strong>Route:</strong> {data.route.route_name}</p>
-      <p><strong>Service:</strong> {data.route.service_day_type}</p>
-      <p><strong>Window:</strong> {data.route.operating_window}</p>
-      <p><strong>Direction:</strong> {data.current_direction}</p>
-      <p><strong>Status:</strong> <span className={data.on_time_status === "early" ? "text-yellow-600" : data.on_time_status === "late" ? "text-red-600" : "text-green-600"}>{data.on_time_status.toUpperCase()}</span></p>
-      <p><strong>Last Seen:</strong> {formatLastSeen(data.last_seen_seconds)}</p>
-      <hr className="border-fpuLight" />
-      <p><strong>Next Stop:</strong> {data.next_event?.stop_name ?? "None"}</p>
-      <p><strong>Event Type:</strong> {data.next_event?.event_type ?? "-"}</p>
-      <p><strong>Scheduled:</strong> {formatTime(data.next_event?.scheduled_time ?? null)}</p>
-      {data.estimated_arrival_minutes !== null && (
-        <p><strong>ETA:</strong> <span className="font-semibold text-fpuPurple">{Math.ceil(data.estimated_arrival_minutes)} min</span></p>
-      )}
+    <div className="mt-4 bg-white rounded-lg p-4 text-sm space-y-3 border border-gray-200 shadow-md">
+      <h3 className="font-semibold text-fpuPurple uppercase tracking-wide">{isUpcoming ? "Upcoming Route" : "Today's Route"}</h3>
+
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-600 font-medium">Route:</span>
+        <span className="text-fpuPurple font-semibold text-right">{data.route.route_name}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-600 font-medium">Service:</span>
+        <span className="text-gray-900 text-right">{data.route.service_day_type}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-600 font-medium">Window:</span>
+        <span className="text-gray-900 text-right">{data.route.operating_window}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-600 font-medium">Direction:</span>
+        <span className="text-fpuPurple font-mono text-right">{data.current_direction}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-600 font-medium">Status:</span>
+        <span className={`${statusClass(data.on_time_status)} font-semibold text-right`}>
+          {data.on_time_status.replace("_", " ").toUpperCase()}
+        </span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-gray-600 font-medium">GPS Seen:</span>
+        <span className="text-fpuPurple font-mono text-right">{formatLastSeen(data.last_seen_seconds)}</span>
+      </div>
+
+      <div className="pt-3 border-t border-gray-200 space-y-2">
+        <div className="flex justify-between gap-4 text-xs">
+          <span className="text-gray-600">Next Stop:</span>
+          <span className="text-fpuPurple font-mono text-right">{data.next_event?.stop_name ?? "None"}</span>
+        </div>
+        <div className="flex justify-between gap-4 text-xs">
+          <span className="text-gray-600">Event Type:</span>
+          <span className="text-fpuPurple font-mono text-right">{data.next_event?.event_type ?? "-"}</span>
+        </div>
+        <div className="flex justify-between gap-4 text-xs">
+          <span className="text-gray-600">Scheduled:</span>
+          <span className="text-fpuPurple font-mono text-right">{formatTime(data.next_event?.scheduled_time ?? null)}</span>
+        </div>
+        <div className="flex justify-between gap-4 text-xs">
+          <span className="text-gray-600">ETA:</span>
+          <span className="text-fpuPurple font-mono text-right">{formatETA(data.estimated_arrival_minutes)}</span>
+        </div>
+      </div>
+
       {data.status_delta_minutes !== null && !isUpcoming && (
         <p className="text-xs text-fpuMedium italic">
           {Math.abs(data.status_delta_minutes) > 5 
@@ -110,7 +163,6 @@ export default function SchedulePanel({ deviceId }: { deviceId: string }) {
             : "On schedule"}
         </p>
       )}
-      <p><strong>ETA:</strong> {formatETA(data.estimated_arrival_minutes)}</p>
     </div>
   );
 }

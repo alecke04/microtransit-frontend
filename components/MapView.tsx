@@ -23,6 +23,7 @@ const DEFAULT_POSITION = {
   speed: 0,
 };
 const GPS_STALE_MS = 30_000;
+const STATIONARY_JITTER_METERS = 4;
 
 const MARKER_IMAGES = {
   "vehicle-marker-green": "#10b981",
@@ -80,6 +81,20 @@ function getLocationTimeMs(point: { timestamp?: number; created_at?: string }): 
   }
 
   return null;
+}
+
+function distanceMeters(a: [number, number], b: [number, number]): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMeters = 6_371_000;
+  const dLat = toRad(b[0] - a[0]);
+  const dLon = toRad(b[1] - a[1]);
+  const lat1 = toRad(a[0]);
+  const lat2 = toRad(b[0]);
+  const hav =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
 }
 
 export default function MapView({
@@ -232,6 +247,28 @@ export default function MapView({
       }
 
       const speed = message?.speed ?? 0;
+      const currentLatLng: [number, number] = [
+        currentPosRef.current.latitude,
+        currentPosRef.current.longitude,
+      ];
+      const isStationaryJitter =
+        speed < 5 && distanceMeters(currentLatLng, latlng) < STATIONARY_JITTER_METERS;
+
+      if (isStationaryJitter) {
+        currentPosRef.current = {
+          ...currentPosRef.current,
+          speed,
+        };
+        setMarkerData(currentPosRef.current);
+
+        if (message) {
+          onLocationUpdate?.(message);
+          restartStaleTimer();
+        }
+
+        return;
+      }
+
       updateTrail(latlng, speed);
       animateMarker(latlng, speed);
 
@@ -633,12 +670,12 @@ export default function MapView({
           >
             <div
               style={{
-                width: 30,
-                height: 30,
+                width: 18,
+                height: 18,
                 borderRadius: "50%",
                 background: getMarkerColor(safeMarkerData.speed),
-                border: "3px solid #ffffff",
-                boxShadow: "0 8px 18px rgba(0,0,0,0.28)",
+                border: "2px solid #ffffff",
+                boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
                 transform: "translateZ(0)",
               }}
             />

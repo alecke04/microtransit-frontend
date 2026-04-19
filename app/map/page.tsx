@@ -44,7 +44,7 @@ export default function MapPage() {
         {/* Right Sidebar - Schedule */}
         <aside className="sidebar right">
           <h2>Schedule</h2>
-          <SchedulePanel deviceId={deviceId} />
+          <SchedulePanel deviceId={deviceId} refreshToken={location?.timestamp ?? null} />
         </aside>
       </main>
     </>
