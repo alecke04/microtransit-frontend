@@ -3,8 +3,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Map from "react-map-gl/maplibre";
-import { Layer, Source } from "react-map-gl/maplibre";
+import { Layer, Marker, Source } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
+import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { fetchDeviceHistory } from "@/lib/api";
@@ -24,6 +25,25 @@ const DEFAULT_POSITION = {
 };
 const GPS_STALE_MS = 30_000;
 const STATIONARY_HOLD_METERS = 18;
+
+const MAP_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors",
+    },
+  },
+  layers: [
+    {
+      id: "osm",
+      type: "raster",
+      source: "osm",
+    },
+  ],
+};
 
 const MARKER_IMAGES = {
   "vehicle-marker-green": "#10b981",
@@ -63,6 +83,12 @@ const TrailOverlay = memo(function TrailOverlay({ data, paint, layout }: TrailOv
     </Source>
   );
 });
+
+function getMarkerColor(speed: number): string {
+  if (speed < 5) return "#10b981";
+  if (speed < 25) return "#f97316";
+  return "#dc2626";
+}
 
 function createMarkerImage(id: MarkerImageId): Promise<HTMLImageElement> {
   const fill = MARKER_IMAGES[id];
@@ -239,9 +265,10 @@ export default function MapView({
 
         const latitude = startLat + (endLat - startLat) * eased;
         const longitude = startLng + (endLng - startLng) * eased;
+        const position = { latitude, longitude, speed };
 
-        currentPosRef.current = { latitude, longitude, speed };
-        setMarkerData(currentPosRef.current);
+        currentPosRef.current = position;
+        setMarkerData(position);
 
         if (progress < 1) {
           animationFrameRef.current = requestAnimationFrame(step);
@@ -552,25 +579,6 @@ export default function MapView({
     [trailCoords],
   );
 
-  const markerSourceData = useMemo(
-    () => ({
-      type: "FeatureCollection" as const,
-      features: [
-        {
-          type: "Feature" as const,
-          geometry: {
-            type: "Point" as const,
-            coordinates: [safeMarkerData.longitude, safeMarkerData.latitude],
-          },
-          properties: {
-            speed: safeMarkerData.speed,
-          },
-        },
-      ],
-    }),
-    [safeMarkerData.latitude, safeMarkerData.longitude, safeMarkerData.speed],
-  );
-
   const trailLayerPaint = useMemo(
     () => ({
       "line-color": "#501D83",
@@ -614,27 +622,6 @@ export default function MapView({
     [],
   );
 
-  const markerLayerLayout = useMemo(
-    () => ({
-      "icon-image": [
-        "case",
-        ["<", ["get", "speed"], 5],
-        "vehicle-marker-green",
-        ["<", ["get", "speed"], 25],
-        "vehicle-marker-orange",
-        "vehicle-marker-red",
-      ] as unknown as string,
-      "icon-size": 0.24,
-      "icon-anchor": "center" as const,
-      "icon-offset": [0, 0] as [number, number],
-      "icon-allow-overlap": true,
-      "icon-ignore-placement": true,
-      "icon-pitch-alignment": "viewport" as const,
-      "icon-rotation-alignment": "viewport" as const,
-    }),
-    [],
-  );
-
   return (
     <div
       style={{
@@ -661,24 +648,7 @@ export default function MapView({
           bearing: 0,
         }}
         style={{ width: "100%", height: "100%" }}
-        mapStyle={{
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution: "© OpenStreetMap contributors",
-            },
-          },
-          layers: [
-            {
-              id: "osm",
-              type: "raster",
-              source: "osm",
-            },
-          ],
-        }}
+        mapStyle={MAP_STYLE}
         dragPan={false}
         dragRotate={false}
         doubleClickZoom={false}
@@ -688,10 +658,24 @@ export default function MapView({
       >
         <TrailOverlay data={trailSourceData} paint={trailLayerPaint} layout={trailLayerLayout} />
 
-        {markerImagesReady && (
-          <Source id="vehicle-marker" type="geojson" data={markerSourceData}>
-            <Layer id="vehicle-marker-symbol" type="symbol" layout={markerLayerLayout} />
-          </Source>
+        {safeMarkerData.latitude && safeMarkerData.longitude && (
+          <Marker
+            latitude={safeMarkerData.latitude}
+            longitude={safeMarkerData.longitude}
+            anchor="center"
+          >
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: getMarkerColor(safeMarkerData.speed),
+                border: "2px solid #ffffff",
+                boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
+                transform: "translateZ(0)",
+              }}
+            />
+          </Marker>
         )}
 
         {stationaryPoints.length > 0 && (
