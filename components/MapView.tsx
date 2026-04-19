@@ -23,7 +23,7 @@ const DEFAULT_POSITION = {
   speed: 0,
 };
 const GPS_STALE_MS = 30_000;
-const STATIONARY_JITTER_METERS = 4;
+const STATIONARY_HOLD_METERS = 18;
 
 const MARKER_IMAGES = {
   "vehicle-marker-green": "#10b981",
@@ -108,9 +108,7 @@ export default function MapView({
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const staleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPosRef = useRef(DEFAULT_POSITION);
-  const rotationFrameRef = useRef<number | null>(null);
-  const rotationSpeedRef = useRef(0.004);
-  const targetRotationSpeedRef = useRef(0.004);
+  const bearingRef = useRef(0);
   const interactionStateRef = useRef<{
     active: boolean;
     pointerType: "touch" | "mouse" | null;
@@ -229,11 +227,34 @@ export default function MapView({
         }
       };
 
+      if (mapRef.current) {
+        mapRef.current.easeTo({
+          center: [endLng, endLat],
+          duration: durationMs,
+          easing: (t) =>
+            t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+        });
+      }
+
       animationFrameRef.current = requestAnimationFrame(step);
+    };
+
+    const setMarkerPosition = (latlng: [number, number], speed: number) => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      currentPosRef.current = {
+        latitude: latlng[0],
+        longitude: latlng[1],
+        speed,
+      };
+      setMarkerData(currentPosRef.current);
 
       if (mapRef.current) {
         mapRef.current.jumpTo({
-          center: [endLng, endLat],
+          center: [latlng[1], latlng[0]],
         });
       }
     };
@@ -251,10 +272,10 @@ export default function MapView({
         currentPosRef.current.latitude,
         currentPosRef.current.longitude,
       ];
-      const isStationaryJitter =
-        speed < 5 && distanceMeters(currentLatLng, latlng) < STATIONARY_JITTER_METERS;
+      const distanceFromMarker = distanceMeters(currentLatLng, latlng);
+      const isStopped = speed < 5;
 
-      if (isStationaryJitter) {
+      if (isStopped && distanceFromMarker < STATIONARY_HOLD_METERS) {
         currentPosRef.current = {
           ...currentPosRef.current,
           speed,
@@ -270,7 +291,11 @@ export default function MapView({
       }
 
       updateTrail(latlng, speed);
-      animateMarker(latlng, speed);
+      if (isStopped) {
+        setMarkerPosition(latlng, speed);
+      } else {
+        animateMarker(latlng, speed);
+      }
 
       if (message) {
         onLocationUpdate?.(message);
@@ -403,37 +428,6 @@ export default function MapView({
   }, [deviceId, onConnectionChange, onLocationUpdate]);
 
   useEffect(() => {
-    let disposed = false;
-    let lastFrameTime = performance.now();
-    let currentBearing = 0;
-
-    const rotate = (now: number) => {
-      if (disposed) return;
-
-      const deltaMs = now - lastFrameTime;
-      lastFrameTime = now;
-
-      rotationSpeedRef.current += (targetRotationSpeedRef.current - rotationSpeedRef.current) * 0.08;
-      currentBearing = (currentBearing + deltaMs * rotationSpeedRef.current) % 360;
-
-      if (mapRef.current) {
-        mapRef.current.setBearing(currentBearing);
-      }
-
-      rotationFrameRef.current = requestAnimationFrame(rotate);
-    };
-
-    rotationFrameRef.current = requestAnimationFrame(rotate);
-
-    return () => {
-      disposed = true;
-      if (rotationFrameRef.current !== null) {
-        cancelAnimationFrame(rotationFrameRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
 
     const map = mapRef.current.getMap();
@@ -497,20 +491,17 @@ export default function MapView({
 
     const deltaX = event.clientX - lastX;
     interactionStateRef.current.lastX = event.clientX;
-
-    const multiplier = event.pointerType === "mouse" ? 0.0032 : 0.0017;
-    const maxSpeed = event.pointerType === "mouse" ? 0.065 : 0.04;
-    const adjustedSpeed = Math.max(-maxSpeed, Math.min(maxSpeed, deltaX * multiplier));
-    targetRotationSpeedRef.current = adjustedSpeed;
+    const degreesPerPixel = event.pointerType === "mouse" ? 0.18 : 0.12;
+    bearingRef.current = (bearingRef.current + deltaX * degreesPerPixel) % 360;
+    mapRef.current?.setBearing(bearingRef.current);
   };
 
-  const resetTouchRotation = () => {
+  const resetManualRotation = () => {
     interactionStateRef.current = {
       active: false,
       pointerType: null,
       lastX: null,
     };
-    targetRotationSpeedRef.current = 0.004;
   };
 
   const trailSourceData = useMemo(
@@ -616,9 +607,9 @@ export default function MapView({
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={resetTouchRotation}
-      onPointerCancel={resetTouchRotation}
-      onPointerLeave={resetTouchRotation}
+      onPointerUp={resetManualRotation}
+      onPointerCancel={resetManualRotation}
+      onPointerLeave={resetManualRotation}
     >
       <Map
         ref={mapRef}

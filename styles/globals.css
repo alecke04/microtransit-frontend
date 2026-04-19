@@ -94,6 +94,7 @@ h1, h2, h3, h4, h5, h6 {
   border-right: none;
   border-left: 1px solid #e0e0e0;
   grid-column: 3;
+  padding-top: 5.35rem;
 }
 
 .sidebar h2 {
@@ -311,6 +312,7 @@ h1, h2, h3, h4, h5, h6 {
     border-bottom: none;
     border-top: 1px solid #e0e0e0;
     order: 3;
+    padding-top: 1.5rem;
   }
 
   .map-and-schedule {
@@ -343,5 +345,48 @@ h1, h2, h3, h4, h5, h6 {
     clear: both;
     flex: 0 0 auto;
     order: 3;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .home-shell {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .home-shell header > div {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .home-shell header img {
+    height: 2rem;
+  }
+
+  .home-main {
+    min-height: 0;
+  }
+
+  .home-content {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .home-content h1 {
+    font-size: clamp(2rem, 8vw, 3rem);
+    margin-bottom: 0.5rem;
+  }
+
+  .home-content a {
+    padding: 0.65rem 2rem;
+  }
+
+  .home-features {
+    display: none;
+  }
+
+  .home-footer {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
   }
 }
