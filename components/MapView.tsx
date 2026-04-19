@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Map from "react-map-gl/maplibre";
 import { Layer, Marker, Source } from "react-map-gl/maplibre";
@@ -32,6 +32,37 @@ const MARKER_IMAGES = {
 } as const;
 
 type MarkerImageId = keyof typeof MARKER_IMAGES;
+
+type TrailOverlayProps = {
+  data: {
+    type: "FeatureCollection";
+    features: Array<{
+      type: "Feature";
+      geometry: {
+        type: "LineString";
+        coordinates: number[][];
+      };
+      properties: Record<string, never>;
+    }>;
+  };
+  paint: {
+    "line-color": string;
+    "line-width": number;
+    "line-opacity": number;
+  };
+  layout: {
+    "line-cap": "round";
+    "line-join": "round";
+  };
+};
+
+const TrailOverlay = memo(function TrailOverlay({ data, paint, layout }: TrailOverlayProps) {
+  return (
+    <Source id="trail" type="geojson" data={data}>
+      <Layer id="trail-line" type="line" paint={paint} layout={layout} />
+    </Source>
+  );
+});
 
 function getMarkerColor(speed: number): string {
   if (speed < 5) return "#10b981";
@@ -549,10 +580,18 @@ export default function MapView({
   const trailLayerPaint = useMemo(
     () => ({
       "line-color": "#501D83",
-      "line-width": 3,
-      "line-opacity": safeMarkerData.speed < 5 ? 0.3 : 0.7,
+      "line-width": 4,
+      "line-opacity": 0.76,
     }),
-    [safeMarkerData.speed],
+    [],
+  );
+
+  const trailLayerLayout = useMemo(
+    () => ({
+      "line-cap": "round" as const,
+      "line-join": "round" as const,
+    }),
+    [],
   );
 
   const stationaryPointsGeoJSON = useMemo(
@@ -653,11 +692,7 @@ export default function MapView({
         scrollZoom={false}
         touchZoomRotate={false}
       >
-        {trailCoords.length > 0 && (
-          <Source id="trail" type="geojson" data={trailSourceData}>
-            <Layer id="trail-line" type="line" paint={trailLayerPaint} />
-          </Source>
-        )}
+        <TrailOverlay data={trailSourceData} paint={trailLayerPaint} layout={trailLayerLayout} />
 
         {safeMarkerData.latitude && safeMarkerData.longitude && (
           <Marker
