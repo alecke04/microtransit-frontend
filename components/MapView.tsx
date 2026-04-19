@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Map from "react-map-gl/maplibre";
-import { Layer, Marker, Source } from "react-map-gl/maplibre";
+import { Layer, Source } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -63,12 +63,6 @@ const TrailOverlay = memo(function TrailOverlay({ data, paint, layout }: TrailOv
     </Source>
   );
 });
-
-function getMarkerColor(speed: number): string {
-  if (speed < 5) return "#10b981";
-  if (speed < 25) return "#f97316";
-  return "#dc2626";
-}
 
 function createMarkerImage(id: MarkerImageId): Promise<HTMLImageElement> {
   const fill = MARKER_IMAGES[id];
@@ -630,7 +624,7 @@ export default function MapView({
         "vehicle-marker-orange",
         "vehicle-marker-red",
       ] as unknown as string,
-      "icon-size": 0.58,
+      "icon-size": 0.24,
       "icon-anchor": "center" as const,
       "icon-offset": [0, 0] as [number, number],
       "icon-allow-overlap": true,
@@ -694,24 +688,10 @@ export default function MapView({
       >
         <TrailOverlay data={trailSourceData} paint={trailLayerPaint} layout={trailLayerLayout} />
 
-        {safeMarkerData.latitude && safeMarkerData.longitude && (
-          <Marker
-            latitude={safeMarkerData.latitude}
-            longitude={safeMarkerData.longitude}
-            anchor="center"
-          >
-            <div
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: getMarkerColor(safeMarkerData.speed),
-                border: "2px solid #ffffff",
-                boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-                transform: "translateZ(0)",
-              }}
-            />
-          </Marker>
+        {markerImagesReady && (
+          <Source id="vehicle-marker" type="geojson" data={markerSourceData}>
+            <Layer id="vehicle-marker-symbol" type="symbol" layout={markerLayerLayout} />
+          </Source>
         )}
 
         {stationaryPoints.length > 0 && (
