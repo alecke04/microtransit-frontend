@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import Map from "react-map-gl/maplibre";
-import { Layer, Source } from "react-map-gl/maplibre";
+import { Layer, Marker, Source } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -625,10 +625,24 @@ export default function MapView({
           </Source>
         )}
 
-        {markerImagesReady && safeMarkerData.latitude && safeMarkerData.longitude && (
-          <Source id="vehicle-marker" type="geojson" data={markerSourceData}>
-            <Layer id="vehicle-marker-symbol" type="symbol" layout={markerLayerLayout} />
-          </Source>
+        {safeMarkerData.latitude && safeMarkerData.longitude && (
+          <Marker
+            latitude={safeMarkerData.latitude}
+            longitude={safeMarkerData.longitude}
+            anchor="center"
+          >
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                background: getMarkerColor(safeMarkerData.speed),
+                border: "3px solid #ffffff",
+                boxShadow: "0 8px 18px rgba(0,0,0,0.28)",
+                transform: "translateZ(0)",
+              }}
+            />
+          </Marker>
         )}
 
         {stationaryPoints.length > 0 && (
