@@ -43,10 +43,8 @@ function statusClass(status: string): string {
 
 export default function SchedulePanel({
   deviceId,
-  refreshToken,
 }: {
   deviceId: string;
-  refreshToken?: number | null;
 }) {
   const [data, setData] = useState<TodayScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +94,7 @@ export default function SchedulePanel({
       active = false;
       clearInterval(interval);
     };
-  }, [deviceId, refreshToken]);
+  }, [deviceId]);
 
   if (error) {
     return <div className="bg-white rounded-lg p-4 text-sm text-gray-600 italic border border-gray-200 shadow-md">{error}</div>;

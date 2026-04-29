@@ -158,6 +158,8 @@ export default function MapView({
   const animationFrameRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const staleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestPointTimeRef = useRef<number | null>(null);
+  const hasConnectedOnceRef = useRef(false);
   const currentPosRef = useRef(DEFAULT_POSITION);
   const bearingRef = useRef(0);
   const interactionStateRef = useRef<{
@@ -204,6 +206,7 @@ export default function MapView({
       setTrailCoords([]);
       setStationaryPoints([]);
       setMarkerData(DEFAULT_POSITION);
+      latestPointTimeRef.current = null;
       onLocationUpdate?.(null);
 
       if (mapRef.current) {
@@ -320,6 +323,10 @@ export default function MapView({
       }
 
       const speed = message?.speed ?? 0;
+      const pointTime = message ? getLocationTimeMs({ timestamp: message.timestamp }) : null;
+      if (pointTime !== null) {
+        latestPointTimeRef.current = Math.max(latestPointTimeRef.current ?? 0, pointTime);
+      }
       const currentLatLng: [number, number] = [
         currentPosRef.current.latitude,
         currentPosRef.current.longitude,
@@ -375,6 +382,18 @@ export default function MapView({
 
           setConnection(connected);
 
+          if (connected) {
+            const isReconnect = hasConnectedOnceRef.current;
+            hasConnectedOnceRef.current = true;
+
+            if (isReconnect) {
+              void loadHistory({
+                allowMockFallback: false,
+                preserveCurrentState: true,
+              });
+            }
+          }
+
           if (!connected && !reconnectTimeoutRef.current) {
             reconnectTimeoutRef.current = setTimeout(() => {
               reconnectTimeoutRef.current = null;
@@ -385,9 +404,10 @@ export default function MapView({
       );
     };
 
-    const seedInitialPosition = (coords: [number, number][]) => {
+    const seedInitialPosition = (coords: [number, number][], latestPointTime: number | null) => {
       const latest = coords[coords.length - 1] ?? [DEFAULT_POSITION.latitude, DEFAULT_POSITION.longitude];
 
+      latestPointTimeRef.current = latestPointTime;
       pointsRef.current = coords;
       currentPosRef.current = {
         latitude: latest[0],
@@ -408,63 +428,87 @@ export default function MapView({
       }
     };
 
-    const loadHistory = async () => {
+    const parseRecentHistory = (
+      historyResponse: Awaited<ReturnType<typeof fetchDeviceHistory>>,
+    ): { coords: [number, number][]; latestPointTime: number | null } => {
+      const now = Date.now();
+      const recentPoints = historyResponse.locations
+        .filter((p) => {
+          const pointTime = getLocationTimeMs(p);
+          return (
+            pointTime !== null &&
+            now - pointTime <= GPS_STALE_MS &&
+            Number.isFinite(p.latitude) &&
+            Number.isFinite(p.longitude)
+          );
+        })
+        .reverse();
+
+      return {
+        coords: recentPoints.map((p) => [p.latitude, p.longitude] as [number, number]),
+        latestPointTime:
+          recentPoints.length > 0 ? getLocationTimeMs(recentPoints[recentPoints.length - 1]) : null,
+      };
+    };
+
+    const loadHistory = async ({
+      allowMockFallback,
+      preserveCurrentState,
+    }: {
+      allowMockFallback: boolean;
+      preserveCurrentState: boolean;
+    }) => {
       try {
         const useMockMode = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
         const historyResponse = await fetchDeviceHistory(deviceId, 100, useMockMode);
-        const now = Date.now();
-        const coords = historyResponse.locations
-          .filter((p) => {
-            const pointTime = getLocationTimeMs(p);
-            return (
-              pointTime !== null &&
-              now - pointTime <= GPS_STALE_MS &&
-              Number.isFinite(p.latitude) &&
-              Number.isFinite(p.longitude)
-            );
-          })
-          .map((p) => [p.latitude, p.longitude] as [number, number])
-          .reverse();
+        const { coords, latestPointTime } = parseRecentHistory(historyResponse);
+        const canApplyHistory =
+          !preserveCurrentState ||
+          latestPointTimeRef.current === null ||
+          (latestPointTime !== null && latestPointTime >= latestPointTimeRef.current);
 
-        if (coords.length > 0) {
-          seedInitialPosition(coords);
-        } else {
+        if (coords.length > 0 && canApplyHistory) {
+          seedInitialPosition(coords, latestPointTime);
+        } else if (!preserveCurrentState) {
           resetToDefaultMarker();
         }
       } catch (primaryError) {
+        if (!allowMockFallback) {
+          console.warn("[MapView] History refresh failed; keeping current map state", primaryError);
+          return;
+        }
+
         console.warn("[MapView] Primary history load failed, retrying with mock mode", primaryError);
 
         try {
           const historyResponse = await fetchDeviceHistory(deviceId, 100, true);
-          const now = Date.now();
-          const coords = historyResponse.locations
-            .filter((p) => {
-              const pointTime = getLocationTimeMs(p);
-              return (
-                pointTime !== null &&
-                now - pointTime <= GPS_STALE_MS &&
-                Number.isFinite(p.latitude) &&
-                Number.isFinite(p.longitude)
-              );
-            })
-            .map((p) => [p.latitude, p.longitude] as [number, number])
-            .reverse();
+          const { coords, latestPointTime } = parseRecentHistory(historyResponse);
 
           if (coords.length > 0) {
-            seedInitialPosition(coords);
-          } else {
+            seedInitialPosition(coords, latestPointTime);
+          } else if (!preserveCurrentState) {
             resetToDefaultMarker();
           }
         } catch (fallbackError) {
-          console.error("[MapView] Unable to load history, using default marker position", fallbackError);
-          resetToDefaultMarker();
+          if (!preserveCurrentState) {
+            console.error("[MapView] Unable to load history, using default marker position", fallbackError);
+            resetToDefaultMarker();
+          } else {
+            console.warn("[MapView] Unable to refresh history after reconnect; keeping current map state", fallbackError);
+          }
         }
       }
+    };
 
+    const loadHistoryAndConnect = async () => {
+      await loadHistory({
+        allowMockFallback: true,
+        preserveCurrentState: false,
+      });
       connectSocket();
     };
 
-    loadHistory();
+    void loadHistoryAndConnect();
 
     return () => {
       disposed = true;
