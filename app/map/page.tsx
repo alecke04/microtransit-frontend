@@ -34,8 +34,8 @@ export default function MapPage() {
 
         {/* Center - Map */}
         <section className="map-section">
-          <MapView 
-            deviceId={deviceId} 
+          <MapView
+            deviceId={deviceId}
             onConnectionChange={setConnected}
             onLocationUpdate={setLocation}
           />
@@ -44,7 +44,7 @@ export default function MapPage() {
         {/* Right Sidebar - Schedule */}
         <aside className="sidebar right">
           <h2>Schedule</h2>
-          <SchedulePanel deviceId={deviceId} />
+          <SchedulePanel deviceId={deviceId} location={location} />
         </aside>
       </main>
     </>

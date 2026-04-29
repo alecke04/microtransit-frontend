@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchTodaySchedule, fetchUpcomingSchedule, type TodayScheduleResponse } from "@/lib/api";
+import type { LocationUpdateMessage } from "@/lib/websocket";
 
 function formatTime(value: string | null): string {
   if (!value) {
@@ -24,6 +25,15 @@ function formatLastSeen(seconds: number | null): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
+function getElapsedSeconds(timestamp: number | null | undefined): number | null {
+  if (!timestamp) {
+    return null;
+  }
+
+  const sourceTsMs = timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000;
+  return Math.max(0, Math.floor((Date.now() - sourceTsMs) / 1000));
+}
+
 function formatETA(minutes: number | null): string {
   if (minutes === null) {
     return "-";
@@ -43,19 +53,39 @@ function statusClass(status: string): string {
 
 export default function SchedulePanel({
   deviceId,
+  location,
 }: {
   deviceId: string;
+  location?: LocationUpdateMessage | null;
 }) {
   const [data, setData] = useState<TodayScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUpcoming, setIsUpcoming] = useState(false);
+  const [liveLastSeenSeconds, setLiveLastSeenSeconds] = useState<number | null>(
+    getElapsedSeconds(location?.timestamp),
+  );
+
+  useEffect(() => {
+    if (!location?.timestamp) {
+      setLiveLastSeenSeconds(null);
+      return;
+    }
+
+    const updateElapsed = () => {
+      setLiveLastSeenSeconds(getElapsedSeconds(location.timestamp));
+    };
+
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+
+    return () => clearInterval(interval);
+  }, [location]);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       try {
-        // Try today's schedule first
         try {
           const snapshot = await fetchTodaySchedule(deviceId);
           if (active) {
@@ -64,7 +94,6 @@ export default function SchedulePanel({
             setIsUpcoming(false);
           }
         } catch (todayError) {
-          // If today is empty, try upcoming schedule
           try {
             const upcomingSnapshot = await fetchUpcomingSchedule(deviceId);
             if (active) {
@@ -73,7 +102,6 @@ export default function SchedulePanel({
               setIsUpcoming(true);
             }
           } catch (upcomingError) {
-            // Both failed
             if (active) {
               setError("Schedule coming soon");
               setData(null);
@@ -104,6 +132,8 @@ export default function SchedulePanel({
     return <div className="bg-white rounded-lg p-4 text-sm text-gray-600 border border-gray-200 shadow-md">Loading schedule...</div>;
   }
 
+  const displayLastSeenSeconds = liveLastSeenSeconds ?? data.last_seen_seconds;
+
   return (
     <div className="mt-4 bg-white rounded-lg p-4 text-sm space-y-3 border border-gray-200 shadow-md">
       <h3 className="font-semibold text-fpuPurple uppercase tracking-wide">{isUpcoming ? "Upcoming Route" : "Today's Route"}</h3>
@@ -132,7 +162,7 @@ export default function SchedulePanel({
       </div>
       <div className="flex justify-between gap-4">
         <span className="text-gray-600 font-medium">GPS Seen:</span>
-        <span className="text-fpuPurple font-mono text-right">{formatLastSeen(data.last_seen_seconds)}</span>
+        <span className="text-fpuPurple font-mono text-right">{formatLastSeen(displayLastSeenSeconds)}</span>
       </div>
 
       <div className="pt-3 border-t border-gray-200 space-y-2">
@@ -156,8 +186,8 @@ export default function SchedulePanel({
 
       {data.status_delta_minutes !== null && !isUpcoming && (
         <p className="text-xs text-fpuMedium italic">
-          {Math.abs(data.status_delta_minutes) > 5 
-            ? `${Math.round(Math.abs(data.status_delta_minutes))} min ${data.status_delta_minutes < 0 ? "early" : "late"}` 
+          {Math.abs(data.status_delta_minutes) > 5
+            ? `${Math.round(Math.abs(data.status_delta_minutes))} min ${data.status_delta_minutes < 0 ? "early" : "late"}`
             : "On schedule"}
         </p>
       )}
