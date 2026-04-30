@@ -245,6 +245,19 @@ export default function MapView({
       }
     };
 
+    const flushCurrentMarkerToTrail = () => {
+      const currentLatLng: [number, number] = [
+        currentPosRef.current.latitude,
+        currentPosRef.current.longitude,
+      ];
+      const lastPoint = pointsRef.current[pointsRef.current.length - 1];
+
+      if (!lastPoint || lastPoint[0] !== currentLatLng[0] || lastPoint[1] !== currentLatLng[1]) {
+        pointsRef.current.push(currentLatLng);
+        setTrailCoords([...pointsRef.current]);
+      }
+    };
+
     const animateMarker = (latlng: [number, number], speed: number) => {
       const startLat = currentPosRef.current.latitude;
       const startLng = currentPosRef.current.longitude;
@@ -252,6 +265,7 @@ export default function MapView({
       const endLng = latlng[1];
       const startTime = performance.now();
       const durationMs = 900;
+      const baseTrailCoords = [...pointsRef.current];
 
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -269,15 +283,18 @@ export default function MapView({
         const latitude = startLat + (endLat - startLat) * eased;
         const longitude = startLng + (endLng - startLng) * eased;
         const position = { latitude, longitude, speed };
+        const animatedTrailPoint: [number, number] = [latitude, longitude];
 
         currentPosRef.current = position;
         setMarkerData(position);
+        setTrailCoords([...baseTrailCoords, animatedTrailPoint]);
 
         if (progress < 1) {
           animationFrameRef.current = requestAnimationFrame(step);
         } else {
           currentPosRef.current = { latitude: endLat, longitude: endLng, speed };
           setMarkerData(currentPosRef.current);
+          updateTrail([endLat, endLng], speed);
           animationFrameRef.current = null;
         }
       };
@@ -349,10 +366,11 @@ export default function MapView({
         return;
       }
 
-      updateTrail(latlng, speed);
       if (isStopped) {
+        updateTrail(latlng, speed);
         setMarkerPosition(latlng, speed);
       } else {
+        flushCurrentMarkerToTrail();
         animateMarker(latlng, speed);
       }
 
