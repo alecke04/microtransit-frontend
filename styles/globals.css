@@ -94,7 +94,7 @@ h1, h2, h3, h4, h5, h6 {
   border-right: none;
   border-left: 1px solid #e0e0e0;
   grid-column: 3;
-  padding-top: 5.35rem;
+  padding-top: 1.5rem;
 }
 
 .sidebar h2 {

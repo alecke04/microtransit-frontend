@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
@@ -8,15 +8,33 @@ import Header from "@/components/Header";
 import ConnectionBadge from "@/components/ConnectionBadge";
 import DeviceStatusPanel from "@/components/DeviceStatusPanel";
 import SchedulePanel from "@/components/SchedulePanel";
+import { getConfiguredDevices } from "@/lib/devices";
 import type { LocationUpdateMessage } from "@/lib/websocket";
 
 // Leaflet requires browser APIs; dynamic import disables SSR for this component.
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 export default function MapPage() {
-  const deviceId = "TEAM_GPS_01";
+  const configuredDevices = getConfiguredDevices();
+  const [deviceIndex, setDeviceIndex] = useState(0);
   const [connected, setConnected] = useState(false);
   const [location, setLocation] = useState<LocationUpdateMessage | null>(null);
+  const activeDevice = configuredDevices[deviceIndex] ?? configuredDevices[0];
+  const deviceId = activeDevice?.id ?? "TEAM_GPS_01";
+
+  useEffect(() => {
+    setConnected(false);
+    setLocation(null);
+  }, [deviceId]);
+
+  const cycleDevice = () => {
+    setDeviceIndex((current) => {
+      if (configuredDevices.length <= 1) {
+        return current;
+      }
+      return (current + 1) % configuredDevices.length;
+    });
+  };
 
   return (
     <>
@@ -43,6 +61,13 @@ export default function MapPage() {
 
         {/* Right Sidebar - Schedule */}
         <aside className="sidebar right">
+          <button
+            type="button"
+            onClick={cycleDevice}
+            className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-fpuPurple text-white rounded-lg font-semibold hover:bg-fpuDark transition"
+          >
+            {activeDevice?.label ?? "Bus"} &rarr;
+          </button>
           <h2>Schedule</h2>
           <SchedulePanel deviceId={deviceId} location={location} />
         </aside>

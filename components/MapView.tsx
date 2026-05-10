@@ -331,6 +331,16 @@ export default function MapView({
       }
     };
 
+    const initializeFirstLivePoint = (latlng: [number, number], speed: number) => {
+      pointsRef.current = [latlng];
+      setTrailCoords([latlng]);
+      setMarkerPosition(latlng, speed);
+
+      if (speed < 5) {
+        setStationaryPoints([[latlng[0], latlng[1], speed]]);
+      }
+    };
+
     const addPoint = (latlng: [number, number], message?: LocationUpdateMessage) => {
       if (disposed) return;
 
@@ -344,6 +354,18 @@ export default function MapView({
       if (pointTime !== null) {
         latestPointTimeRef.current = Math.max(latestPointTimeRef.current ?? 0, pointTime);
       }
+
+      if (pointsRef.current.length === 0) {
+        initializeFirstLivePoint(latlng, speed);
+
+        if (message) {
+          onLocationUpdate?.(message);
+          restartStaleTimer();
+        }
+
+        return;
+      }
+
       const currentLatLng: [number, number] = [
         currentPosRef.current.latitude,
         currentPosRef.current.longitude,
