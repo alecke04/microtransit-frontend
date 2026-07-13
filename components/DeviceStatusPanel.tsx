@@ -2,17 +2,23 @@
 
 import { useEffect, useState } from "react";
 
-import type { LocationUpdateMessage } from "@/lib/websocket";
+type DeviceLocation = {
+  latitude?: number | null;
+  longitude?: number | null;
+  speed?: number | null;
+  accuracy?: number | null;
+  timestamp?: number | null;
+};
 
 type DeviceStatusPanelProps = {
   deviceId: string;
-  location?: LocationUpdateMessage | null;
+  location?: DeviceLocation | null;
 };
 
 export default function DeviceStatusPanel({ deviceId, location }: DeviceStatusPanelProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  const getSpeedStatus = (speed?: number, hasGPS?: boolean): string => {
+  const getSpeedStatus = (speed?: number | null, hasGPS?: boolean): string => {
     if (!hasGPS) return "Waiting for GPS...";
     if (!speed || speed < 5) return "Stopped";
     if (speed < 25) return "Moving";
@@ -26,6 +32,10 @@ export default function DeviceStatusPanel({ deviceId, location }: DeviceStatusPa
     }
 
     const updateElapsed = () => {
+      if (!location?.timestamp) {
+        setElapsedSeconds(0);
+        return;
+      }
       const now = Date.now();
       const sourceTsMs =
         location.timestamp > 1_000_000_000_000 ? location.timestamp : location.timestamp * 1000;

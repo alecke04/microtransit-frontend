@@ -1,30 +1,29 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Map from "react-map-gl/maplibre";
 import { Layer, Marker, Source } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { fetchDeviceHistory } from "@/lib/api";
-import { openDeviceSocket } from "@/lib/websocket";
-import type { LocationUpdateMessage } from "@/lib/websocket";
+import { fetchDeviceHistory, type VehicleStatusResponse } from "@/lib/api";
 
 type MapViewProps = {
-  deviceId: string;
+  vehicles: VehicleStatusResponse[];
+  selectedVehicleId?: string | null;
+  selectedStopBaseId?: string | null;
+  onSelectVehicle?: (vehicleId: string) => void;
+  onSelectStop?: (stopBaseId: string) => void;
   onConnectionChange?: (connected: boolean) => void;
-  onLocationUpdate?: (data: LocationUpdateMessage | null) => void;
 };
 
 const DEFAULT_POSITION = {
   latitude: 28.148,
   longitude: -81.8484,
-  speed: 0,
 };
-const GPS_STALE_MS = 30_000;
-const STATIONARY_HOLD_METERS = 18;
+
+const VEHICLE_COLORS = ["#501D83", "#f97316", "#0ea5e9", "#22c55e"];
 
 const MAP_STYLE: StyleSpecification = {
   version: 8,
@@ -45,666 +44,192 @@ const MAP_STYLE: StyleSpecification = {
   ],
 };
 
-const MARKER_IMAGES = {
-  "vehicle-marker-green": "#10b981",
-  "vehicle-marker-orange": "#f97316",
-  "vehicle-marker-red": "#dc2626",
-} as const;
-
-type MarkerImageId = keyof typeof MARKER_IMAGES;
-
-type TrailOverlayProps = {
-  data: {
-    type: "FeatureCollection";
-    features: Array<{
-      type: "Feature";
-      geometry: {
-        type: "LineString";
-        coordinates: number[][];
-      };
-      properties: Record<string, never>;
-    }>;
-  };
-  paint: {
-    "line-color": string;
-    "line-width": number;
-    "line-opacity": number;
-  };
-  layout: {
-    "line-cap": "round";
-    "line-join": "round";
-  };
-};
-
-const TrailOverlay = memo(function TrailOverlay({ data, paint, layout }: TrailOverlayProps) {
-  return (
-    <Source id="trail" type="geojson" data={data}>
-      <Layer id="trail-line" type="line" paint={paint} layout={layout} />
-    </Source>
-  );
-});
-
-function getMarkerColor(speed: number): string {
-  if (speed < 5) return "#10b981";
-  if (speed < 25) return "#f97316";
-  return "#dc2626";
-}
-
-function createMarkerImage(id: MarkerImageId): Promise<HTMLImageElement> {
-  const fill = MARKER_IMAGES[id];
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88">
-      <defs>
-        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-          <feDropShadow dx="0" dy="10" stdDeviation="7" flood-color="rgba(0,0,0,0.30)"/>
-        </filter>
-        <linearGradient id="body" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="${fill}" stop-opacity="0.98"/>
-          <stop offset="62%" stop-color="${fill}" stop-opacity="1"/>
-          <stop offset="100%" stop-color="${fill}" stop-opacity="0.9"/>
-        </linearGradient>
-      </defs>
-      <g filter="url(#shadow)">
-        <circle cx="44" cy="44" r="26" fill="url(#body)" stroke="#ffffff" stroke-width="3"/>
-        <circle cx="44" cy="44" r="31" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>
-        <ellipse cx="33" cy="30" rx="10" ry="6" fill="rgba(255,255,255,0.38)" transform="rotate(-25 33 30)"/>
-        <circle cx="44" cy="44" r="15" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
-      </g>
-    </svg>
-  `.trim();
-
-  return new Promise((resolve, reject) => {
-    const image = new Image(88, 88);
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  });
-}
-
-function getLocationTimeMs(point: { timestamp?: number; created_at?: string }): number | null {
-  if (Number.isFinite(point.timestamp)) {
-    return point.timestamp! > 1_000_000_000_000 ? point.timestamp! : point.timestamp! * 1000;
-  }
-
-  if (point.created_at) {
-    const parsed = Date.parse(point.created_at);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
-
-function distanceMeters(a: [number, number], b: [number, number]): number {
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusMeters = 6_371_000;
-  const dLat = toRad(b[0] - a[0]);
-  const dLon = toRad(b[1] - a[1]);
-  const lat1 = toRad(a[0]);
-  const lat2 = toRad(b[0]);
-  const hav =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-
-  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
+function toBaseStopId(stopId: string): string {
+  return stopId.split("_").at(-1) ?? stopId;
 }
 
 export default function MapView({
-  deviceId,
+  vehicles,
+  selectedVehicleId,
+  selectedStopBaseId,
+  onSelectVehicle,
+  onSelectStop,
   onConnectionChange,
-  onLocationUpdate,
 }: MapViewProps) {
   const mapRef = useRef<MapRef>(null);
-  const pointsRef = useRef<[number, number][]>([]);
-  const animationFrameRef = useRef<number | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const staleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestPointTimeRef = useRef<number | null>(null);
-  const hasConnectedOnceRef = useRef(false);
-  const currentPosRef = useRef(DEFAULT_POSITION);
-  const bearingRef = useRef(0);
-  const interactionStateRef = useRef<{
-    active: boolean;
-    pointerType: "touch" | "mouse" | null;
-    lastX: number | null;
-  }>({
-    active: false,
-    pointerType: null,
-    lastX: null,
-  });
+  const [historyByDevice, setHistoryByDevice] = useState<Record<string, [number, number][]>>({});
 
-  const [markerData, setMarkerData] = useState(DEFAULT_POSITION);
-  const [trailCoords, setTrailCoords] = useState<[number, number][]>([]);
-  const [stationaryPoints, setStationaryPoints] = useState<[number, number, number][]>([]);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [markerImagesReady, setMarkerImagesReady] = useState(false);
-
-  const safeMarkerData = useMemo(
-    () => ({
-      latitude: Number.isFinite(markerData.latitude) ? markerData.latitude : DEFAULT_POSITION.latitude,
-      longitude: Number.isFinite(markerData.longitude) ? markerData.longitude : DEFAULT_POSITION.longitude,
-      speed: Number.isFinite(markerData.speed) ? markerData.speed : 0,
-    }),
-    [markerData.latitude, markerData.longitude, markerData.speed],
+  const selectedVehicle = useMemo(
+    () => vehicles.find((vehicle) => vehicle.device_id === selectedVehicleId) ?? vehicles[0] ?? null,
+    [selectedVehicleId, vehicles],
   );
 
+  const visibleStops = useMemo(
+    () => selectedVehicle?.spatial.all_stops ?? vehicles[0]?.spatial.all_stops ?? [],
+    [selectedVehicle, vehicles],
+  );
+
+  const selectedStop = useMemo(() => {
+    if (!selectedStopBaseId) {
+      return null;
+    }
+    return visibleStops.find((stop) => toBaseStopId(stop.stop_id) === selectedStopBaseId) ?? null;
+  }, [selectedStopBaseId, visibleStops]);
+
   useEffect(() => {
-    let disposed = false;
-    let socket: WebSocket | null = null;
+    let active = true;
 
-    const setConnection = (value: boolean) => {
-      onConnectionChange?.(value);
-    };
-
-    const resetToDefaultMarker = () => {
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-
-      pointsRef.current = [];
-      currentPosRef.current = DEFAULT_POSITION;
-      setTrailCoords([]);
-      setStationaryPoints([]);
-      setMarkerData(DEFAULT_POSITION);
-      latestPointTimeRef.current = null;
-      onLocationUpdate?.(null);
-
-      if (mapRef.current) {
-        mapRef.current.jumpTo({
-          center: [DEFAULT_POSITION.longitude, DEFAULT_POSITION.latitude],
-        });
-      }
-    };
-
-    const restartStaleTimer = () => {
-      if (staleTimeoutRef.current) {
-        clearTimeout(staleTimeoutRef.current);
-      }
-
-      staleTimeoutRef.current = setTimeout(() => {
-        staleTimeoutRef.current = null;
-        resetToDefaultMarker();
-      }, GPS_STALE_MS);
-    };
-
-    const updateTrail = (latlng: [number, number], speed: number) => {
-      const lastPoint = pointsRef.current[pointsRef.current.length - 1];
-      if (!lastPoint || lastPoint[0] !== latlng[0] || lastPoint[1] !== latlng[1]) {
-        pointsRef.current.push(latlng);
-        setTrailCoords([...pointsRef.current]);
-      }
-
-      if (speed < 5) {
-        setStationaryPoints((prev) => {
-          const lastStationary = prev[prev.length - 1];
-          if (lastStationary && lastStationary[0] === latlng[0] && lastStationary[1] === latlng[1]) {
-            return prev;
-          }
-          return [...prev, [latlng[0], latlng[1], speed]];
-        });
-      }
-    };
-
-    const flushCurrentMarkerToTrail = () => {
-      const currentLatLng: [number, number] = [
-        currentPosRef.current.latitude,
-        currentPosRef.current.longitude,
-      ];
-      const lastPoint = pointsRef.current[pointsRef.current.length - 1];
-
-      if (!lastPoint || lastPoint[0] !== currentLatLng[0] || lastPoint[1] !== currentLatLng[1]) {
-        pointsRef.current.push(currentLatLng);
-        setTrailCoords([...pointsRef.current]);
-      }
-    };
-
-    const animateMarker = (latlng: [number, number], speed: number) => {
-      const startLat = currentPosRef.current.latitude;
-      const startLng = currentPosRef.current.longitude;
-      const endLat = latlng[0];
-      const endLng = latlng[1];
-      const startTime = performance.now();
-      const durationMs = 900;
-      const baseTrailCoords = [...pointsRef.current];
-
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-
-      const step = (now: number) => {
-        if (disposed) return;
-
-        const progress = Math.min((now - startTime) / durationMs, 1);
-        const eased =
-          progress < 0.5
-            ? 4 * progress * progress * progress
-            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-        const latitude = startLat + (endLat - startLat) * eased;
-        const longitude = startLng + (endLng - startLng) * eased;
-        const position = { latitude, longitude, speed };
-        const animatedTrailPoint: [number, number] = [latitude, longitude];
-
-        currentPosRef.current = position;
-        setMarkerData(position);
-        setTrailCoords([...baseTrailCoords, animatedTrailPoint]);
-
-        if (progress < 1) {
-          animationFrameRef.current = requestAnimationFrame(step);
-        } else {
-          currentPosRef.current = { latitude: endLat, longitude: endLng, speed };
-          setMarkerData(currentPosRef.current);
-          updateTrail([endLat, endLng], speed);
-          animationFrameRef.current = null;
-        }
-      };
-
-      if (mapRef.current) {
-        mapRef.current.easeTo({
-          center: [endLng, endLat],
-          duration: durationMs,
-          easing: (t) =>
-            t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
-        });
-      }
-
-      animationFrameRef.current = requestAnimationFrame(step);
-    };
-
-    const setMarkerPosition = (latlng: [number, number], speed: number) => {
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-
-      currentPosRef.current = {
-        latitude: latlng[0],
-        longitude: latlng[1],
-        speed,
-      };
-      setMarkerData(currentPosRef.current);
-
-      if (mapRef.current) {
-        mapRef.current.jumpTo({
-          center: [latlng[1], latlng[0]],
-        });
-      }
-    };
-
-    const initializeFirstLivePoint = (latlng: [number, number], speed: number) => {
-      pointsRef.current = [latlng];
-      setTrailCoords([latlng]);
-      setMarkerPosition(latlng, speed);
-
-      if (speed < 5) {
-        setStationaryPoints([[latlng[0], latlng[1], speed]]);
-      }
-    };
-
-    const addPoint = (latlng: [number, number], message?: LocationUpdateMessage) => {
-      if (disposed) return;
-
-      if (!Number.isFinite(latlng[0]) || !Number.isFinite(latlng[1])) {
-        console.error("[MapView] Ignoring invalid coordinates", latlng);
-        return;
-      }
-
-      const speed = message?.speed ?? 0;
-      const pointTime = message ? getLocationTimeMs({ timestamp: message.timestamp }) : null;
-      if (pointTime !== null) {
-        latestPointTimeRef.current = Math.max(latestPointTimeRef.current ?? 0, pointTime);
-      }
-
-      if (pointsRef.current.length === 0) {
-        initializeFirstLivePoint(latlng, speed);
-
-        if (message) {
-          onLocationUpdate?.(message);
-          restartStaleTimer();
-        }
-
-        return;
-      }
-
-      const currentLatLng: [number, number] = [
-        currentPosRef.current.latitude,
-        currentPosRef.current.longitude,
-      ];
-      const distanceFromMarker = distanceMeters(currentLatLng, latlng);
-      const isStopped = speed < 5;
-
-      if (isStopped && distanceFromMarker < STATIONARY_HOLD_METERS) {
-        currentPosRef.current = {
-          ...currentPosRef.current,
-          speed,
-        };
-        setMarkerData(currentPosRef.current);
-
-        if (message) {
-          onLocationUpdate?.(message);
-          restartStaleTimer();
-        }
-
-        return;
-      }
-
-      if (isStopped) {
-        updateTrail(latlng, speed);
-        setMarkerPosition(latlng, speed);
-      } else {
-        flushCurrentMarkerToTrail();
-        animateMarker(latlng, speed);
-      }
-
-      if (message) {
-        onLocationUpdate?.(message);
-        restartStaleTimer();
-      }
-    };
-
-    const connectSocket = () => {
-      if (disposed) return;
-
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-
-      socket?.close();
-      socket = openDeviceSocket(
-        deviceId,
-        (message) => {
-          if (disposed) return;
-          addPoint([message.latitude, message.longitude], message);
-        },
-        (connected) => {
-          if (disposed) return;
-
-          setConnection(connected);
-
-          if (connected) {
-            const isReconnect = hasConnectedOnceRef.current;
-            hasConnectedOnceRef.current = true;
-
-            if (isReconnect) {
-              void loadHistory({
-                allowMockFallback: false,
-                preserveCurrentState: true,
-              });
-            }
-          }
-
-          if (!connected && !reconnectTimeoutRef.current) {
-            reconnectTimeoutRef.current = setTimeout(() => {
-              reconnectTimeoutRef.current = null;
-              connectSocket();
-            }, 3000);
-          }
-        },
-      );
-    };
-
-    const seedInitialPosition = (coords: [number, number][], latestPointTime: number | null) => {
-      const latest = coords[coords.length - 1] ?? [DEFAULT_POSITION.latitude, DEFAULT_POSITION.longitude];
-
-      latestPointTimeRef.current = latestPointTime;
-      pointsRef.current = coords;
-      currentPosRef.current = {
-        latitude: latest[0],
-        longitude: latest[1],
-        speed: 0,
-      };
-      setTrailCoords(coords);
-      setMarkerData(currentPosRef.current);
-
-      if (mapRef.current) {
-        mapRef.current.jumpTo({
-          center: [latest[1], latest[0]],
-        });
-      }
-
-      if (coords.length > 0) {
-        restartStaleTimer();
-      }
-    };
-
-    const parseRecentHistory = (
-      historyResponse: Awaited<ReturnType<typeof fetchDeviceHistory>>,
-    ): { coords: [number, number][]; latestPointTime: number | null } => {
-      const now = Date.now();
-      const recentPoints = historyResponse.locations
-        .filter((p) => {
-          const pointTime = getLocationTimeMs(p);
-          return (
-            pointTime !== null &&
-            now - pointTime <= GPS_STALE_MS &&
-            Number.isFinite(p.latitude) &&
-            Number.isFinite(p.longitude)
-          );
-        })
-        .reverse();
-
-      return {
-        coords: recentPoints.map((p) => [p.latitude, p.longitude] as [number, number]),
-        latestPointTime:
-          recentPoints.length > 0 ? getLocationTimeMs(recentPoints[recentPoints.length - 1]) : null,
-      };
-    };
-
-    const loadHistory = async ({
-      allowMockFallback,
-      preserveCurrentState,
-    }: {
-      allowMockFallback: boolean;
-      preserveCurrentState: boolean;
-    }) => {
-      try {
-        const useMockMode = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
-        const historyResponse = await fetchDeviceHistory(deviceId, 100, useMockMode);
-        const { coords, latestPointTime } = parseRecentHistory(historyResponse);
-        const canApplyHistory =
-          !preserveCurrentState ||
-          latestPointTimeRef.current === null ||
-          (latestPointTime !== null && latestPointTime >= latestPointTimeRef.current);
-
-        if (coords.length > 0 && canApplyHistory) {
-          seedInitialPosition(coords, latestPointTime);
-        } else if (!preserveCurrentState) {
-          resetToDefaultMarker();
-        }
-      } catch (primaryError) {
-        if (!allowMockFallback) {
-          console.warn("[MapView] History refresh failed; keeping current map state", primaryError);
-          return;
-        }
-
-        console.warn("[MapView] Primary history load failed, retrying with mock mode", primaryError);
-
+    const loadHistories = async () => {
+      const nextHistory: Record<string, [number, number][]> = {};
+      for (const vehicle of vehicles) {
         try {
-          const historyResponse = await fetchDeviceHistory(deviceId, 100, true);
-          const { coords, latestPointTime } = parseRecentHistory(historyResponse);
-
-          if (coords.length > 0) {
-            seedInitialPosition(coords, latestPointTime);
-          } else if (!preserveCurrentState) {
-            resetToDefaultMarker();
-          }
-        } catch (fallbackError) {
-          if (!preserveCurrentState) {
-            console.error("[MapView] Unable to load history, using default marker position", fallbackError);
-            resetToDefaultMarker();
-          } else {
-            console.warn("[MapView] Unable to refresh history after reconnect; keeping current map state", fallbackError);
-          }
+          const history = await fetchDeviceHistory(vehicle.device_id, 250, false);
+          nextHistory[vehicle.device_id] = history.locations
+            .slice()
+            .reverse()
+            .map((point) => [point.latitude, point.longitude] as [number, number]);
+        } catch {
+          nextHistory[vehicle.device_id] = [];
         }
       }
+
+      if (active) {
+        setHistoryByDevice((current) => ({ ...current, ...nextHistory }));
+        onConnectionChange?.(vehicles.length > 0);
+      }
     };
 
-    const loadHistoryAndConnect = async () => {
-      await loadHistory({
-        allowMockFallback: true,
-        preserveCurrentState: false,
-      });
-      connectSocket();
-    };
+    if (vehicles.length > 0) {
+      void loadHistories();
+    }
 
-    void loadHistoryAndConnect();
+    const interval = setInterval(() => {
+      if (vehicles.length > 0) {
+        void loadHistories();
+      }
+    }, 15000);
 
     return () => {
-      disposed = true;
-
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-
-      if (staleTimeoutRef.current) {
-        clearTimeout(staleTimeoutRef.current);
-      }
-
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-
-      socket?.close();
+      active = false;
+      clearInterval(interval);
     };
-  }, [deviceId, onConnectionChange, onLocationUpdate]);
+  }, [onConnectionChange, vehicles]);
 
-  useEffect(() => {
-    if (!mapLoaded || !mapRef.current) return;
+  const routeGeometry = useMemo(
+    () => selectedVehicle?.spatial.route_geometry ?? vehicles[0]?.spatial.route_geometry ?? [],
+    [selectedVehicle, vehicles],
+  );
 
-    const map = mapRef.current.getMap();
-
-    const registerMarkerImage = async (id: MarkerImageId) => {
-      if (map.hasImage(id)) return;
-
-      const image = await createMarkerImage(id);
-      if (!map.hasImage(id)) {
-        map.addImage(id, image, { pixelRatio: 2 });
-      }
-    };
-
-    const handleStyleImageMissing = (event: { id: string }) => {
-      if (!(event.id in MARKER_IMAGES)) return;
-      void registerMarkerImage(event.id as MarkerImageId);
-    };
-
-    map.on("styleimagemissing", handleStyleImageMissing);
-
-    Promise.all((Object.keys(MARKER_IMAGES) as MarkerImageId[]).map(registerMarkerImage))
-      .then(() => setMarkerImagesReady(true))
-      .catch((error) => {
-        console.error("[MapView] Unable to register marker images", error);
-        setMarkerImagesReady(false);
-      });
-
-    return () => {
-      map.off("styleimagemissing", handleStyleImageMissing);
-    };
-  }, [mapLoaded]);
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === "touch") {
-      interactionStateRef.current = {
-        active: true,
-        pointerType: "touch",
-        lastX: event.clientX,
-      };
-      return;
-    }
-
-    if (event.pointerType === "mouse" && event.button === 0) {
-      interactionStateRef.current = {
-        active: true,
-        pointerType: "mouse",
-        lastX: event.clientX,
-      };
-    }
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!interactionStateRef.current.active) return;
-    if (interactionStateRef.current.pointerType !== event.pointerType) return;
-
-    const { lastX } = interactionStateRef.current;
-    if (lastX === null) {
-      interactionStateRef.current.lastX = event.clientX;
-      return;
-    }
-
-    const deltaX = event.clientX - lastX;
-    interactionStateRef.current.lastX = event.clientX;
-    const degreesPerPixel = event.pointerType === "mouse" ? 0.18 : 0.12;
-    bearingRef.current = (bearingRef.current + deltaX * degreesPerPixel) % 360;
-    mapRef.current?.setBearing(bearingRef.current);
-  };
-
-  const resetManualRotation = () => {
-    interactionStateRef.current = {
-      active: false,
-      pointerType: null,
-      lastX: null,
-    };
-  };
-
-  const trailSourceData = useMemo(
+  const routeSourceData = useMemo(
     () => ({
       type: "FeatureCollection" as const,
-      features: [
-        {
-          type: "Feature" as const,
-          geometry: {
-            type: "LineString" as const,
-            coordinates: trailCoords.map((coord) => [coord[1], coord[0]]),
-          },
-          properties: {},
-        },
-      ],
+      features: routeGeometry.length
+        ? [
+            {
+              type: "Feature" as const,
+              geometry: {
+                type: "LineString" as const,
+                coordinates: routeGeometry.map((point) => [point[1], point[0]]),
+              },
+              properties: {},
+            },
+          ]
+        : [],
     }),
-    [trailCoords],
+    [routeGeometry],
   );
 
-  const trailLayerPaint = useMemo(
-    () => ({
-      "line-color": "#501D83",
-      "line-width": 4,
-      "line-opacity": 0.76,
-    }),
-    [],
-  );
-
-  const trailLayerLayout = useMemo(
-    () => ({
-      "line-cap": "round" as const,
-      "line-join": "round" as const,
-    }),
-    [],
-  );
-
-  const stationaryPointsGeoJSON = useMemo(
+  const stopSourceData = useMemo(
     () => ({
       type: "FeatureCollection" as const,
-      features: stationaryPoints.map(([lat, lon, speed]) => ({
+      features: visibleStops.map((stop) => ({
         type: "Feature" as const,
         geometry: {
           type: "Point" as const,
-          coordinates: [lon, lat],
+          coordinates: [stop.longitude, stop.latitude],
         },
-        properties: { speed },
+        properties: {
+          stopId: stop.stop_id,
+          baseStopId: toBaseStopId(stop.stop_id),
+          isSelected: selectedStopBaseId === toBaseStopId(stop.stop_id),
+        },
       })),
     }),
-    [stationaryPoints],
+    [selectedStopBaseId, visibleStops],
   );
 
-  const stationaryPointsLayerPaint = useMemo(
-    () => ({
-      "circle-radius": 5,
-      "circle-color": "#10b981",
-      "circle-stroke-width": 1,
-      "circle-stroke-color": "#047857",
-      "circle-opacity": 0.6,
-    }),
-    [],
+  const trailSources = useMemo(
+    () =>
+      vehicles.map((vehicle, index) => {
+        const coordinates = historyByDevice[vehicle.device_id] ?? [];
+        return {
+          id: vehicle.device_id,
+          color: VEHICLE_COLORS[index % VEHICLE_COLORS.length],
+          data: {
+            type: "FeatureCollection" as const,
+            features: coordinates.length
+              ? [
+                  {
+                    type: "Feature" as const,
+                    geometry: {
+                      type: "LineString" as const,
+                      coordinates: coordinates.map((coord) => [coord[1], coord[0]]),
+                    },
+                    properties: {},
+                  },
+                ]
+              : [],
+          },
+        };
+      }),
+    [historyByDevice, vehicles],
   );
+
+  useEffect(() => {
+    if (!mapRef.current) {
+      return;
+    }
+
+    const points: [number, number][] = [];
+    if (selectedStop) {
+      points.push([selectedStop.latitude, selectedStop.longitude]);
+    }
+
+    if (selectedVehicle) {
+      points.push([selectedVehicle.latest_location.latitude, selectedVehicle.latest_location.longitude]);
+    } else {
+      vehicles.forEach((vehicle) => {
+        points.push([vehicle.latest_location.latitude, vehicle.latest_location.longitude]);
+      });
+    }
+
+    if (!points.length && routeGeometry.length) {
+      points.push(...routeGeometry.map((point) => [point[0], point[1]] as [number, number]));
+    }
+
+    if (!points.length) {
+      return;
+    }
+
+    const latitudes = points.map((point) => point[0]);
+    const longitudes = points.map((point) => point[1]);
+    mapRef.current.fitBounds(
+      [
+        [Math.min(...longitudes), Math.min(...latitudes)],
+        [Math.max(...longitudes), Math.max(...latitudes)],
+      ],
+      { padding: 70, duration: 800 },
+    );
+  }, [routeGeometry, selectedStop, selectedVehicle, vehicles]);
+
+  const selectedVehicleColor = selectedVehicle
+    ? VEHICLE_COLORS[
+        Math.max(
+          0,
+          vehicles.findIndex((vehicle) => vehicle.device_id === selectedVehicle.device_id),
+        ) % VEHICLE_COLORS.length
+      ]
+    : VEHICLE_COLORS[0];
 
   return (
     <div
@@ -713,61 +238,131 @@ export default function MapView({
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        touchAction: "pan-y",
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={resetManualRotation}
-      onPointerCancel={resetManualRotation}
-      onPointerLeave={resetManualRotation}
     >
       <Map
         ref={mapRef}
-        onLoad={() => setMapLoaded(true)}
         initialViewState={{
           latitude: DEFAULT_POSITION.latitude,
           longitude: DEFAULT_POSITION.longitude,
-          zoom: 15.85,
-          pitch: 62,
+          zoom: 14.8,
+          pitch: 0,
           bearing: 0,
+        }}
+        interactiveLayerIds={["stop-circles"]}
+        onClick={(event) => {
+          const feature = event.features?.[0];
+          if (feature?.layer?.id === "stop-circles") {
+            const stopBaseId = String(feature.properties?.baseStopId ?? "");
+            if (stopBaseId) {
+              onSelectStop?.(stopBaseId);
+            }
+          }
         }}
         style={{ width: "100%", height: "100%" }}
         mapStyle={MAP_STYLE}
-        dragPan={false}
-        dragRotate={false}
-        doubleClickZoom={false}
-        keyboard={false}
-        scrollZoom={false}
-        touchZoomRotate={false}
       >
-        <TrailOverlay data={trailSourceData} paint={trailLayerPaint} layout={trailLayerLayout} />
+        <Source id="route" type="geojson" data={routeSourceData}>
+          <Layer
+            id="route-line"
+            type="line"
+            paint={{
+              "line-color": selectedVehicleColor,
+              "line-width": 5,
+              "line-opacity": 0.45,
+            }}
+            layout={{
+              "line-cap": "round",
+              "line-join": "round",
+            }}
+          />
+        </Source>
 
-        {safeMarkerData.latitude && safeMarkerData.longitude && (
+        {trailSources.map((trail) => (
+          <Source key={trail.id} id={`trail-${trail.id}`} type="geojson" data={trail.data}>
+            <Layer
+              id={`trail-line-${trail.id}`}
+              type="line"
+              paint={{
+                "line-color": trail.color,
+                "line-width": selectedVehicleId === trail.id ? 4 : 3,
+                "line-opacity": selectedVehicleId === trail.id ? 0.85 : 0.45,
+              }}
+              layout={{
+                "line-cap": "round",
+                "line-join": "round",
+              }}
+            />
+          </Source>
+        ))}
+
+        <Source id="stops" type="geojson" data={stopSourceData}>
+          <Layer
+            id="stop-circles"
+            type="circle"
+            paint={{
+              "circle-radius": ["case", ["boolean", ["get", "isSelected"], false], 9, 6],
+              "circle-color": ["case", ["boolean", ["get", "isSelected"], false], "#f97316", "#ffffff"],
+              "circle-stroke-color": "#501D83",
+              "circle-stroke-width": 2,
+            }}
+          />
+        </Source>
+
+        {vehicles.map((vehicle, index) => (
           <Marker
-            latitude={safeMarkerData.latitude}
-            longitude={safeMarkerData.longitude}
+            key={vehicle.device_id}
+            latitude={vehicle.latest_location.latitude}
+            longitude={vehicle.latest_location.longitude}
             anchor="center"
+            onClick={(event) => {
+              event.originalEvent.stopPropagation();
+              onSelectVehicle?.(vehicle.device_id);
+            }}
           >
             <div
               style={{
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: getMarkerColor(safeMarkerData.speed),
-                border: "2px solid #ffffff",
-                boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-                transform: "translateZ(0)",
+                minWidth: 26,
+                height: 26,
+                padding: "0 8px",
+                borderRadius: 999,
+                background: selectedVehicleId === vehicle.device_id ? VEHICLE_COLORS[index % VEHICLE_COLORS.length] : "#ffffff",
+                color: selectedVehicleId === vehicle.device_id ? "#ffffff" : VEHICLE_COLORS[index % VEHICLE_COLORS.length],
+                border: `2px solid ${VEHICLE_COLORS[index % VEHICLE_COLORS.length]}`,
+                boxShadow: "0 4px 10px rgba(0,0,0,0.18)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
               }}
-            />
+            >
+              {vehicle.device_id.split("_").at(-1)}
+            </div>
           </Marker>
-        )}
+        ))}
 
-        {stationaryPoints.length > 0 && (
-          <Source id="stationary" type="geojson" data={stationaryPointsGeoJSON}>
-            <Layer id="stationary-circles" type="circle" paint={stationaryPointsLayerPaint} />
-          </Source>
+        {selectedStop && (
+          <Marker latitude={selectedStop.latitude} longitude={selectedStop.longitude} anchor="bottom">
+            <div
+              style={{
+                background: "#ffffff",
+                color: "#501D83",
+                border: "2px solid #501D83",
+                borderRadius: 12,
+                padding: "4px 8px",
+                fontSize: 12,
+                fontWeight: 700,
+                boxShadow: "0 6px 14px rgba(0,0,0,0.18)",
+              }}
+            >
+              {selectedStop.name}
+            </div>
+          </Marker>
         )}
       </Map>
     </div>
   );
 }
+
