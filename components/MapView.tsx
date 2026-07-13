@@ -7,10 +7,17 @@ import type { MapRef } from "react-map-gl/maplibre";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { fetchDeviceHistory, type VehicleStatusResponse } from "@/lib/api";
+import {
+  fetchDeviceHistory,
+  type ServiceStopResponse,
+  type VehicleStatusResponse,
+  type VehicleStopStatus,
+} from "@/lib/api";
 
 type MapViewProps = {
   vehicles: VehicleStatusResponse[];
+  routeGeometry: number[][];
+  visibleStops: Array<VehicleStopStatus | ServiceStopResponse>;
   selectedVehicleId?: string | null;
   selectedStopBaseId?: string | null;
   onSelectVehicle?: (vehicleId: string) => void;
@@ -50,6 +57,8 @@ function toBaseStopId(stopId: string): string {
 
 export default function MapView({
   vehicles,
+  routeGeometry,
+  visibleStops,
   selectedVehicleId,
   selectedStopBaseId,
   onSelectVehicle,
@@ -62,11 +71,6 @@ export default function MapView({
   const selectedVehicle = useMemo(
     () => vehicles.find((vehicle) => vehicle.device_id === selectedVehicleId) ?? vehicles[0] ?? null,
     [selectedVehicleId, vehicles],
-  );
-
-  const visibleStops = useMemo(
-    () => selectedVehicle?.spatial.all_stops ?? vehicles[0]?.spatial.all_stops ?? [],
-    [selectedVehicle, vehicles],
   );
 
   const selectedStop = useMemo(() => {
@@ -114,11 +118,6 @@ export default function MapView({
       clearInterval(interval);
     };
   }, [onConnectionChange, vehicles]);
-
-  const routeGeometry = useMemo(
-    () => selectedVehicle?.spatial.route_geometry ?? vehicles[0]?.spatial.route_geometry ?? [],
-    [selectedVehicle, vehicles],
-  );
 
   const routeSourceData = useMemo(
     () => ({

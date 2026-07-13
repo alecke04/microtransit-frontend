@@ -128,6 +128,31 @@ export interface VehicleStatusListResponse {
   vehicles: VehicleStatusResponse[];
 }
 
+export interface ServiceStopResponse {
+  stop_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  sequence: number;
+  progress_fraction: number;
+}
+
+export interface ServiceRouteSnapshotResponse {
+  service_code: string;
+  service_name: string;
+  service_window: string;
+  is_active_now: boolean;
+  geometry: number[][];
+  stops: ServiceStopResponse[];
+}
+
+export interface CurrentServiceSnapshotResponse {
+  current_time_local: string;
+  active_service: ServiceRouteSnapshotResponse | null;
+  upcoming_service: ServiceRouteSnapshotResponse | null;
+  services: ServiceRouteSnapshotResponse[];
+}
+
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export async function fetchDeviceHistory(deviceId: string, limit = 100, useMock = false): Promise<LocationListResponse> {
@@ -183,6 +208,16 @@ export async function fetchActiveVehicleStatuses(): Promise<VehicleStatusListRes
 
   if (!response.ok) {
     throw new Error(`Active vehicle status request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchCurrentServiceSnapshot(): Promise<CurrentServiceSnapshotResponse> {
+  const response = await fetch(`${apiBase}/api/services/current`, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(`Current service snapshot request failed: ${response.status}`);
   }
 
   return response.json();

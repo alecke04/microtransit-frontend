@@ -10,6 +10,9 @@ import DeviceStatusPanel from "@/components/DeviceStatusPanel";
 import SchedulePanel from "@/components/SchedulePanel";
 import {
   fetchActiveVehicleStatuses,
+  fetchCurrentServiceSnapshot,
+  type CurrentServiceSnapshotResponse,
+  type ServiceRouteSnapshotResponse,
   type VehicleStatusResponse,
 } from "@/lib/api";
 
@@ -29,13 +32,14 @@ function estimateEtaMinutes(remainingRouteM: number, speedKmh: number): number {
 export default function MapPage() {
   const [connected, setConnected] = useState(false);
   const [vehicles, setVehicles] = useState<VehicleStatusResponse[]>([]);
+  const [serviceSnapshot, setServiceSnapshot] = useState<CurrentServiceSnapshotResponse | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [selectedStopBaseId, setSelectedStopBaseId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    const load = async () => {
+    const loadVehicles = async () => {
       try {
         const response = await fetchActiveVehicleStatuses();
         if (!active) {
@@ -61,12 +65,37 @@ export default function MapPage() {
       }
     };
 
-    void load();
-    const interval = setInterval(load, 3000);
+    const loadServiceSnapshot = async () => {
+      try {
+        const response = await fetchCurrentServiceSnapshot();
+        if (!active) {
+          return;
+        }
+        setServiceSnapshot(response);
+        setSelectedStopBaseId((current) => {
+          if (current) {
+            return current;
+          }
+          const firstStop = response.active_service?.stops[0] ?? response.upcoming_service?.stops[0] ?? null;
+          return firstStop ? toBaseStopId(firstStop.stop_id) : null;
+        });
+      } catch {
+        if (!active) {
+          return;
+        }
+        setServiceSnapshot(null);
+      }
+    };
+
+    void loadVehicles();
+    void loadServiceSnapshot();
+    const vehicleInterval = setInterval(loadVehicles, 3000);
+    const serviceInterval = setInterval(loadServiceSnapshot, 60000);
 
     return () => {
       active = false;
-      clearInterval(interval);
+      clearInterval(vehicleInterval);
+      clearInterval(serviceInterval);
     };
   }, []);
 
@@ -76,8 +105,39 @@ export default function MapPage() {
   );
 
   const activeStops = useMemo(
-    () => selectedVehicle?.spatial.all_stops ?? [],
-    [selectedVehicle],
+    () => {
+      if (selectedVehicle) {
+        return selectedVehicle.spatial.all_stops;
+      }
+      const fallbackService = serviceSnapshot?.active_service ?? serviceSnapshot?.upcoming_service ?? null;
+      if (!fallbackService) {
+        return [];
+      }
+      return fallbackService.stops.map((stop) => ({
+        ...stop,
+        straight_line_distance_m: 0,
+        remaining_route_m: 0,
+        is_nearest: false,
+        is_next: false,
+      }));
+    },
+    [selectedVehicle, serviceSnapshot],
+  );
+
+  const visibleService = useMemo<ServiceRouteSnapshotResponse | null>(
+    () =>
+      serviceSnapshot?.services.find(
+        (service) => selectedVehicle && service.service_code === selectedVehicle.spatial.active_service_code,
+      ) ??
+      serviceSnapshot?.active_service ??
+      serviceSnapshot?.upcoming_service ??
+      null,
+    [selectedVehicle, serviceSnapshot],
+  );
+
+  const routeGeometry = useMemo(
+    () => selectedVehicle?.spatial.route_geometry ?? visibleService?.geometry ?? [],
+    [selectedVehicle, visibleService],
   );
 
   const selectedStop = useMemo(() => {
@@ -161,6 +221,8 @@ export default function MapPage() {
         <section className="map-section">
           <MapView
             vehicles={vehicles}
+            routeGeometry={routeGeometry}
+            visibleStops={activeStops}
             selectedVehicleId={selectedVehicle?.device_id ?? null}
             selectedStopBaseId={selectedStopBaseId}
             onSelectVehicle={(vehicleId) => {
