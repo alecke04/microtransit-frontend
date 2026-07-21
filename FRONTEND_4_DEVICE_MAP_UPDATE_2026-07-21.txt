@@ -1,0 +1,33 @@
+MicroTransit Frontend 4-Device Map Note
+
+Updated: July 21, 2026
+
+What changed:
+
+- The default public frontend device list now includes:
+  - TEAM_GPS_01
+  - TEAM_GPS_02
+  - TEAM_GPS_03
+  - TEAM_GPS_04
+
+Files changed:
+
+- lib/devices.ts
+- .env.example
+
+Important behavior note:
+
+- The unified live map in app/map/page.tsx already renders whatever vehicles the backend returns from /api/status/active.
+- That means the real backend is the source of truth for which live buses appear on the map.
+- This frontend change makes the default public device configuration consistent with a 4-tracker deployment instead of an older 2-tracker assumption.
+
+Deployment note:
+
+- If Vercel or local env sets NEXT_PUBLIC_DEVICE_IDS explicitly, that env value overrides the default in lib/devices.ts.
+- For a 4-device deployment, set:
+  NEXT_PUBLIC_DEVICE_IDS=TEAM_GPS_01,TEAM_GPS_02,TEAM_GPS_03,TEAM_GPS_04
+
+Plain summary:
+
+- backend live map controls what active vehicles show
+- frontend default config now matches the 4-device backend setup

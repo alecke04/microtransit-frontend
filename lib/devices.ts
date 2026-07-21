@@ -3,7 +3,7 @@ export type DeviceOption = {
   label: string;
 };
 
-const DEFAULT_DEVICE_IDS = ["TEAM_GPS_01", "TEAM_GPS_02"];
+const DEFAULT_DEVICE_IDS = ["TEAM_GPS_01", "TEAM_GPS_02", "TEAM_GPS_03", "TEAM_GPS_04"];
 
 function toLabel(deviceId: string): string {
   const parts = deviceId.split("_");
