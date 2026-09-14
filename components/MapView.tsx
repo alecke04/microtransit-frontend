@@ -174,7 +174,6 @@ export default function MapView({
 
   const [markerData, setMarkerData] = useState(DEFAULT_POSITION);
   const [trailCoords, setTrailCoords] = useState<[number, number][]>([]);
-  const [stationaryPoints, setStationaryPoints] = useState<[number, number, number][]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [markerImagesReady, setMarkerImagesReady] = useState(false);
 
@@ -204,7 +203,6 @@ export default function MapView({
       pointsRef.current = [];
       currentPosRef.current = DEFAULT_POSITION;
       setTrailCoords([]);
-      setStationaryPoints([]);
       setMarkerData(DEFAULT_POSITION);
       latestPointTimeRef.current = null;
       onLocationUpdate?.(null);
@@ -227,21 +225,11 @@ export default function MapView({
       }, GPS_STALE_MS);
     };
 
-    const updateTrail = (latlng: [number, number], speed: number) => {
+    const updateTrail = (latlng: [number, number]) => {
       const lastPoint = pointsRef.current[pointsRef.current.length - 1];
       if (!lastPoint || lastPoint[0] !== latlng[0] || lastPoint[1] !== latlng[1]) {
         pointsRef.current.push(latlng);
         setTrailCoords([...pointsRef.current]);
-      }
-
-      if (speed < 5) {
-        setStationaryPoints((prev) => {
-          const lastStationary = prev[prev.length - 1];
-          if (lastStationary && lastStationary[0] === latlng[0] && lastStationary[1] === latlng[1]) {
-            return prev;
-          }
-          return [...prev, [latlng[0], latlng[1], speed]];
-        });
       }
     };
 
@@ -294,7 +282,7 @@ export default function MapView({
         } else {
           currentPosRef.current = { latitude: endLat, longitude: endLng, speed };
           setMarkerData(currentPosRef.current);
-          updateTrail([endLat, endLng], speed);
+          updateTrail([endLat, endLng]);
           animationFrameRef.current = null;
         }
       };
@@ -335,10 +323,6 @@ export default function MapView({
       pointsRef.current = [latlng];
       setTrailCoords([latlng]);
       setMarkerPosition(latlng, speed);
-
-      if (speed < 5) {
-        setStationaryPoints([[latlng[0], latlng[1], speed]]);
-      }
     };
 
     const addPoint = (latlng: [number, number], message?: LocationUpdateMessage) => {
@@ -389,7 +373,7 @@ export default function MapView({
       }
 
       if (isStopped) {
-        updateTrail(latlng, speed);
+        updateTrail(latlng);
         setMarkerPosition(latlng, speed);
       } else {
         flushCurrentMarkerToTrail();
@@ -680,32 +664,6 @@ export default function MapView({
     [],
   );
 
-  const stationaryPointsGeoJSON = useMemo(
-    () => ({
-      type: "FeatureCollection" as const,
-      features: stationaryPoints.map(([lat, lon, speed]) => ({
-        type: "Feature" as const,
-        geometry: {
-          type: "Point" as const,
-          coordinates: [lon, lat],
-        },
-        properties: { speed },
-      })),
-    }),
-    [stationaryPoints],
-  );
-
-  const stationaryPointsLayerPaint = useMemo(
-    () => ({
-      "circle-radius": 5,
-      "circle-color": "#10b981",
-      "circle-stroke-width": 1,
-      "circle-stroke-color": "#047857",
-      "circle-opacity": 0.6,
-    }),
-    [],
-  );
-
   return (
     <div
       style={{
@@ -760,12 +718,6 @@ export default function MapView({
               }}
             />
           </Marker>
-        )}
-
-        {stationaryPoints.length > 0 && (
-          <Source id="stationary" type="geojson" data={stationaryPointsGeoJSON}>
-            <Layer id="stationary-circles" type="circle" paint={stationaryPointsLayerPaint} />
-          </Source>
         )}
       </Map>
     </div>
