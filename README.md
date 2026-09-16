@@ -1,6 +1,6 @@
 # MicroTransit Frontend
 
-Next.js frontend for the MicroTransit live shuttle tracker. It shows the Florida Poly route map, live vehicle position, connection state, recent GPS history, and schedule data from the FastAPI backend.
+Next.js frontend for the MicroTransit live shuttle tracker. It shows the route map, live vehicle position, connection state, and recent GPS history from the FastAPI backend.
 
 ## Architecture
 
@@ -8,16 +8,15 @@ Next.js frontend for the MicroTransit live shuttle tracker. It shows the Florida
 2. The backend stores each point and broadcasts live updates over WebSocket.
 3. The frontend loads recent history from `GET /api/locations/{device_id}`.
 4. The frontend subscribes to `WS /ws/{device_id}` for live marker updates.
-5. The frontend reads route status from `/api/schedule/{device_id}/today` and `/api/schedule/{device_id}/upcoming`.
+5. The browser dashboard does not poll the retired `/api/schedule/{device_id}/today` or `/api/schedule/{device_id}/upcoming` endpoints.
 
 ## Key Files
 
 - `app/page.tsx`: landing page.
-- `app/map/page.tsx`: live tracking dashboard.
+- `app/map/page.tsx`: live tracking dashboard and vehicle selection.
 - `components/MapView.tsx`: MapLibre map, live marker, trail, and WebSocket integration.
-- `components/SchedulePanel.tsx`: current and upcoming route schedule view.
 - `components/DeviceStatusPanel.tsx`: live telemetry details.
-- `lib/api.ts`: REST API client with basic public-config validation.
+- `lib/api.ts`: recent-location REST client.
 - `lib/websocket.ts`: WebSocket client with safe URL handling.
 - `lib/devices.ts`: device list parsing from public environment variables.
 
