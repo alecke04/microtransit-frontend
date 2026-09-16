@@ -7,11 +7,10 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import ConnectionBadge from "@/components/ConnectionBadge";
 import DeviceStatusPanel from "@/components/DeviceStatusPanel";
-import SchedulePanel from "@/components/SchedulePanel";
 import { getConfiguredDevices } from "@/lib/devices";
 import type { LocationUpdateMessage } from "@/lib/websocket";
 
-// Leaflet requires browser APIs; dynamic import disables SSR for this component.
+// Map rendering requires browser APIs; dynamic import disables SSR for this component.
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 export default function MapPage() {
@@ -59,7 +58,7 @@ export default function MapPage() {
           />
         </section>
 
-        {/* Right Sidebar - Schedule */}
+        {/* Right Sidebar - Vehicle selection only. Schedule endpoints were retired. */}
         <aside className="sidebar right">
           <button
             type="button"
@@ -68,8 +67,10 @@ export default function MapPage() {
           >
             {activeDevice?.label ?? "Bus"} &rarr;
           </button>
-          <h2>Schedule</h2>
-          <SchedulePanel deviceId={deviceId} location={location} />
+          <h2>Live Vehicle</h2>
+          <div className="bg-white rounded-lg p-4 text-sm text-gray-600 border border-gray-200 shadow-md">
+            Tracking <span className="font-semibold text-fpuPurple">{activeDevice?.label ?? deviceId}</span> from live GPS telemetry.
+          </div>
         </aside>
       </main>
     </>
