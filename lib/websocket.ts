@@ -19,27 +19,38 @@ export function openDeviceSocket(
   const socket = new WebSocket(`${wsBase}/ws/${deviceId}`);
 
   socket.onopen = () => {
-    console.info("WebSocket connected");
+    console.info(`[WebSocket] connected device=${deviceId}`);
     onStatusChange(true);
   };
-  socket.onclose = () => {
-    console.info("WebSocket disconnected");
+
+  socket.onclose = (event) => {
+    console.info(
+      `[WebSocket] closed device=${deviceId} code=${event.code} clean=${event.wasClean} reason=${event.reason || "none"}`,
+    );
     onStatusChange(false);
   };
+
+  // Do not independently mark the socket disconnected here. Browsers can emit
+  // an error before the definitive close event; treating both as disconnects
+  // used to schedule a replacement socket that could close a still-live one.
   socket.onerror = (event) => {
-    console.error("WebSocket error:", event);
-    onStatusChange(false);
+    console.error(`[WebSocket] error device=${deviceId}`, event);
   };
 
   socket.onmessage = (event) => {
     try {
       const parsed = JSON.parse(event.data);
-      
-      // Ignore ping messages (used for keeping connection alive)
-      if (parsed.type === 'ping') {
+
+      // The backend uses an application-level heartbeat. Reply with a small
+      // text frame so its receive loop observes the client as alive instead of
+      // timing out every 30 seconds while the browser silently ignores pings.
+      if (parsed.type === "ping") {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send("pong");
+        }
         return;
       }
-      
+
       const message = parsed as LocationUpdateMessage;
       onMessage(message);
     } catch (err) {
