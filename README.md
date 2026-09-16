@@ -39,6 +39,14 @@ NEXT_PUBLIC_API_URL=https://microtransit-api-production.up.railway.app
 NEXT_PUBLIC_WS_URL=wss://microtransit-api-production.up.railway.app
 ```
 
+## Fork / handoff configuration and external ownership
+
+The browser dashboard currently requires only public client-side configuration: the backend HTTP/WebSocket origins, device IDs, and the mock-data toggle. It does **not** require a private API key in the browser. Citrus Connection can fork the repository and replace those public environment values with the URLs/device IDs for its deployment.
+
+Every `NEXT_PUBLIC_*` value is visible to browser users. Do not place tracker write keys, database credentials, Railway tokens, service-account JSON, or any other private credential in a `NEXT_PUBLIC_*` variable or in this repository.
+
+External ownership for continued browser deployment is the hosting project/account (currently Vercel), its domain/DNS if applicable, and the configured public backend origins. A fork preserves Git history, so any credential that ever appeared in history must be rotated/revoked before that history is shared outside the trusted team.
+
 ## Local Development
 
 ```bash
